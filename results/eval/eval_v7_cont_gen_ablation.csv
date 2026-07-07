@@ -3,3 +3,4 @@ vicuna-7b,0.87,0.85
 llama-8b,0.61,0.82
 mistral-7b,0.81,0.89
 qwen-7b,0.52,0.81
+gpt4o-mini,0.48,0.68
