@@ -61,8 +61,10 @@ def parse_args():
     p.add_argument("--checkpoint", default="results/grpo_v7_e5_run1/final_model")
     p.add_argument("--input",      default="data/nq100_validate.csv")
     p.add_argument("--output",     default="results/grpo_v7_e5_run1/pd_eval100_v7_e5.csv")
-    p.add_argument("--gpu_id",      type=int, default=0)
-    p.add_argument("--group_size",  type=int, default=8)
+    p.add_argument("--gpu_id",       type=int, default=0)
+    p.add_argument("--group_size",   type=int, default=8)
+    p.add_argument("--num_adv_docs", type=int, default=3,
+                   help="쿼리당 생성할 악성 문서 수 (N), 기본 3 → doc0_seed+doc1~doc3=4개")
     p.add_argument("--embed_device", default="cuda")
     return p.parse_args()
 
@@ -129,6 +131,7 @@ def main():
         temp=v7e5.TEMPERATURE,
         device=device,
         max_prompt_tokens=v7e5.MAX_PROMPT_TOKENS,
+        num_adv_docs=args.num_adv_docs,
     )
 
     out_df = out_df.rename(columns={"doc0": "doc0_seed"})

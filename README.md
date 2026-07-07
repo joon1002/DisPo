@@ -83,12 +83,13 @@ CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_v7_e5.py \
 | `--input` | `data/nq_500_pd_7b.csv` | 훈련 쿼리 CSV |
 | `--output_dir` | `results/grpo_v7_run1` | 체크포인트 저장 경로 |
 | `--num_epochs` | `3` | 훈련 epoch 수 |
-| `--group_size` | `8` | GRPO 그룹 크기 (G) — 쿼리당 후보 수 |
+| `--group_size` | `8` | GRPO 그룹 크기 **(G)** — 쿼리당 생성 후보 수 |
+| `--num_adv_docs` | `3` | 쿼리당 최종 악성 문서 수 **(N)** — doc0_seed 제외, 총 N+1개 |
 | `--lora_r` | `16` | LoRA rank |
 | `--lora_alpha` | `32` | LoRA alpha |
 | `--lr` | `1e-5` | Learning rate |
 | `--gpu_id` | `0` | CUDA 디바이스 ID |
-| `--embed_device` | `cpu` | 임베딩 모델 디바이스 (VRAM 절약 시 cpu) |
+| `--embed_device` | `cuda` | 임베딩 모델 디바이스 (VRAM 부족 시 cpu) |
 | `--limit` | `None` | 쿼리 수 제한 (디버깅용, 예: `--limit 10`) |
 
 ---
@@ -125,7 +126,9 @@ CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_e5_checkpoint.py \
 | `--checkpoint` | `results/.../final_model` | LoRA 체크포인트 경로 |
 | `--input` | `data/nq100_validate.csv` | 평가 쿼리 CSV |
 | `--output` | `results/.../pd_eval100.csv` | 출력 CSV 경로 |
-| `--group_size` | `8` | 후보 생성 수 (G), best 1개 선택 |
+| `--group_size` | `8` | 후보 생성 수 **(G)**, best 1개 선택 |
+| `--num_adv_docs` | `3` | 쿼리당 생성할 악성 문서 수 **(N)** |
+| `--embed_device` | `cuda` | 임베딩 모델 디바이스 |
 | `--gpu_id` | `0` | CUDA 디바이스 ID |
 
 > Inference에는 post-hoc 교정(숫자 분절 수정 + Answer 필드 overwrite)이 자동 적용됩니다.
@@ -153,8 +156,8 @@ python scripts/apply_number_correction.py \
 | Generator | `Qwen/Qwen2.5-1.5B-Instruct` | 악성 문서 생성 모델 |
 | Surrogate LLM | `lmsys/vicuna-7b-v1.3` | r_generation + r_ppl 계산용 |
 | Defense filter | `paraphrase-MiniLM-L6-v2` | r_disp_embed + RAGDefender 방어 |
-| GROUP_SIZE (G) | 8 | 쿼리당 생성 후보 수 |
-| N (adv docs/query) | 4 | 최종 선택 악성 문서 수 (doc0_seed + doc1~3) |
+| GROUP_SIZE (G) | 8 | 쿼리당 생성 후보 수 (`--group_size`로 변경 가능) |
+| N (adv docs/query) | 3 | 최종 선택 악성 문서 수 (`--num_adv_docs`로 변경 가능, 총 N+1개) |
 | MIN_NEW_TOKENS | 80 | 생성 최소 토큰 |
 | MAX_NEW_TOKENS | 160 | 생성 최대 토큰 |
 | TEMPERATURE | 0.85 | 샘플링 온도 |

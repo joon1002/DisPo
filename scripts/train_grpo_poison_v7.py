@@ -1060,7 +1060,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed",            type=int,   default=42)
     p.add_argument("--limit",           type=int,   default=None)
     p.add_argument("--gpu_id",          type=int,   default=0)
-    p.add_argument("--embed_device",    default="cpu")
+    p.add_argument("--embed_device",    default="cuda")
     p.add_argument("--vicuna_device",   default="cuda")
     p.add_argument("--max_memory_gb",   type=int,   default=None)
     p.add_argument("--vicuna_max_memory_gb", type=int, default=None)

@@ -61,8 +61,11 @@ def parse_args():
     p.add_argument("--checkpoint", default="results/grpo_v7_run1/final_model")
     p.add_argument("--input",      default="data/nq100_validate.csv")
     p.add_argument("--output",     default="results/grpo_v7_run1/pd_eval100_v7.csv")
-    p.add_argument("--gpu_id",     type=int, default=0)
-    p.add_argument("--group_size", type=int, default=8)
+    p.add_argument("--gpu_id",        type=int, default=0)
+    p.add_argument("--group_size",    type=int, default=8)
+    p.add_argument("--num_adv_docs",  type=int, default=3,
+                   help="쿼리당 생성할 악성 문서 수 (N), 기본 3 → doc0_seed+doc1~doc3=4개")
+    p.add_argument("--embed_device",  default="cuda")
     p.add_argument("--allow_train_input", action="store_true",
                    help="훈련 쿼리 데이터셋 입력 허용 (기본 비허용)")
     return p.parse_args()
@@ -93,7 +96,7 @@ def main():
         defense_model=v7.DEFENSE_MODEL,
         vicuna_model=v7.VICUNA_MODEL,
         device=device,
-        embed_device="cuda",
+        embed_device=args.embed_device,
         vicuna_device=device,
         max_prompt_tokens=v7.MAX_PROMPT_TOKENS,
     )
@@ -143,6 +146,7 @@ def main():
         temp=v7.TEMPERATURE,
         device=device,
         max_prompt_tokens=v7.MAX_PROMPT_TOKENS,
+        num_adv_docs=args.num_adv_docs,
     )
 
     # pipeline이 기대하는 컬럼명: doc0_seed (not doc0)
