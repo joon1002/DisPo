@@ -5,6 +5,57 @@ Contriever(v7) 또는 E5(v7-e5)를 화이트박스 검색기로 사용하여 Qwe
 
 ---
 
+## 새 서버에서 빠르게 시작하기
+
+### 1. 레포 클론
+
+```bash
+git clone https://github.com/joon1002/DisPo.git
+cd DisPo
+```
+
+### 2. Python 환경 구성
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+
+# 훈련/inference용
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+pip install transformers peft accelerate sentence-transformers scikit-learn tqdm pandas
+
+# 성능평가 추가 패키지 (eval/ 사용 시)
+pip install beir
+```
+
+### 3. 전체 흐름 (v7 기준)
+
+```bash
+# Step 1: 훈련 (GPU 0, ~8h)
+CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_v7.py \
+    --input      data/nq_500_pd_7b.csv \
+    --output_dir results/grpo_v7_run1
+
+# Step 2: Inference (훈련 완료 후)
+CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_checkpoint.py \
+    --checkpoint results/grpo_v7_run1/final_model \
+    --input      data/nq100_validate.csv \
+    --output     results/grpo_v7_run1/pd_eval100_v7.csv
+
+# Step 3: 성능평가 (eval/ 디렉토리에서)
+cd eval/
+CUDA_VISIBLE_DEVICES=0 python main_dispo_ragdef_beir.py \
+    --retrieval_model   contriever \
+    --model_config_path model_configs/vicuna7b_config.json \
+    --model_name        vicuna \
+    --docs_csv          ../results/grpo_v7_run1/pd_eval100_v7.csv \
+    --adv_per_query     4 --top_k 5
+```
+
+> 성능평가 전체 가이드는 [eval/README.md](eval/README.md) 참고
+
+---
+
 ## 구조
 
 ```
