@@ -1,0 +1,5 @@
+generator,nd_asr,rd_asr
+vicuna-7b,0.87,0.85
+llama-8b,0.61,0.82
+mistral-7b,0.81,0.89
+qwen-7b,0.52,0.81
