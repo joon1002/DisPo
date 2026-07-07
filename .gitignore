@@ -1,4 +1,4 @@
-results/
+results/grpo_*/
 __pycache__/
 *.pyc
 *.pyo

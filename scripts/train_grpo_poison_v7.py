@@ -772,9 +772,10 @@ def process_query(
     G: int, min_new: int, max_new: int, temp: float, lam_k: float, device,
     max_prompt_tokens: int,
     stream_backward: bool,
+    num_adv_docs: int = 3,
 ) -> Tuple[List[str], List[Optional[float]], List[float], List[np.ndarray], List[int]]:
     docs, losses, rwds, rvecs, n_valids = [], [], [], [], []
-    for _ in range(3):
+    for _ in range(num_adv_docs):
         loss_v, best_doc, best_r, mean_rv, n_valid = train_position(
             model, tokenizer, optimizer, uw,
             query, target, seed,
@@ -800,6 +801,7 @@ def infer_poison_docs(
     df: pd.DataFrame,
     G: int, min_new: int, max_new: int, temp: float, device,
     max_prompt_tokens: int,
+    num_adv_docs: int = 3,
 ) -> pd.DataFrame:
     model.eval()
     records = []
@@ -809,7 +811,7 @@ def infer_poison_docs(
         seed   = str(row["seed_doc"])
 
         docs: List[str] = []
-        for pos in range(3):
+        for pos in range(num_adv_docs):
             context_docs = [seed] + docs
             prompt_text = format_prompt(tokenizer, query, target, seed, docs)
             enc = tokenizer(prompt_text, return_tensors="pt",
@@ -864,15 +866,15 @@ def infer_poison_docs(
             best = mmr_select(valid_cands, combined.cpu().numpy(), n_select=1)
             docs.append(valid_cands[best[0]])
 
-        records.append({
+        rec = {
             "query":          query,
             "target_answer":  target,
             "correct_answer": str(row.get("correct_answer", "")),
             "doc0": seed,
-            "doc1": docs[0],
-            "doc2": docs[1],
-            "doc3": docs[2],
-        })
+        }
+        for i, d in enumerate(docs):
+            rec[f"doc{i+1}"] = d
+        records.append(rec)
     return pd.DataFrame(records)
 
 
@@ -973,13 +975,14 @@ def train(args) -> None:
                 device=device,
                 max_prompt_tokens=args.max_prompt_tokens,
                 stream_backward=args.stream_backward,
+                num_adv_docs=args.num_adv_docs,
             )
             valid_losses = [l for l in losses if l is not None]
             epoch_rewards.extend(rwds)
             epoch_losses.extend(valid_losses)
 
             si = uw.sigma_info()
-            for pos in range(3):
+            for pos in range(len(losses)):
                 log_fh.write(json.dumps({
                     "epoch":        epoch,
                     "step":         step,
@@ -1003,7 +1006,7 @@ def train(args) -> None:
             global_bar.set_postfix(
                 ep=f"{epoch+1}/{args.num_epochs}",
                 loss=f"{avg_l:.4f}", reward=f"{avg_r:.4f}",
-                skip=n_skip, nv=f"{sum(n_valids)//3}/8",
+                skip=n_skip, nv=f"{sum(n_valids)//(args.num_adv_docs)}/{args.group_size}",
                 σ=f"{si['σ_retrieval']:.2f}/{si['σ_disp_embed']:.2f}"
                   f"/{si['σ_tfidf_disp']:.2f}/{si['σ_generation']:.2f}/{si['σ_ppl']:.2f}",
                 q=query[:12],
@@ -1045,6 +1048,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--vicuna_model",    default=VICUNA_MODEL)
     p.add_argument("--num_epochs",      type=int,   default=3)
     p.add_argument("--group_size",      type=int,   default=GROUP_SIZE)
+    p.add_argument("--num_adv_docs",   type=int,   default=3,
+                   help="쿼리당 생성할 악성 문서 수 (N). doc0_seed 제외, 기본 3 → 총 4개")
     p.add_argument("--min_new_tokens",  type=int,   default=MIN_NEW_TOKENS)
     p.add_argument("--max_new_tokens",  type=int,   default=MAX_NEW_TOKENS)
     p.add_argument("--temperature",     type=float, default=TEMPERATURE)
