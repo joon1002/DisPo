@@ -100,6 +100,14 @@ pip install transformers peft accelerate sentence-transformers scikit-learn tqdm
 - Retriever(v7): `facebook/contriever`
 - Retriever(v7-e5): `intfloat/e5-base-v2`
 - Defense filter: `paraphrase-MiniLM-L6-v2`
+-------
+방어 포함 성능평가에 필요한 명령어 -  직접 NQ corpus를 받는 방법
+
+cd ~/DisPo/data
+wget https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/nq.zip
+unzip nq.zip
+mv nq/corpus.jsonl corpus.jsonl
+rm -rf nq nq.zip
 
 ---
 
