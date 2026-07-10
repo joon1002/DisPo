@@ -1049,7 +1049,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--num_epochs",      type=int,   default=3)
     p.add_argument("--group_size",      type=int,   default=GROUP_SIZE)
     p.add_argument("--num_adv_docs",   type=int,   default=3,
-                   help="쿼리당 생성할 악성 문서 수 (N). doc0_seed 제외, 기본 3 → 총 4개")
+                   help="seed 제외 추가 생성 문서 수. 기본 3 → 총 4개. --N 지정 시 무시됨")
+    p.add_argument("--N",              type=int,   default=None,
+                   help="seed 포함 총 악성문서 수. 지정 시 --num_adv_docs 대신 사용. "
+                        "예: --N 4 → seed+doc1+doc2+doc3, --N 2 → seed+doc1")
     p.add_argument("--min_new_tokens",  type=int,   default=MIN_NEW_TOKENS)
     p.add_argument("--max_new_tokens",  type=int,   default=MAX_NEW_TOKENS)
     p.add_argument("--temperature",     type=float, default=TEMPERATURE)
@@ -1069,7 +1072,12 @@ def parse_args() -> argparse.Namespace:
                    choices=["float16", "fp16", "bfloat16", "bf16"])
     p.add_argument("--stream_backward", action="store_true",
                    help="Low-memory mode: per-candidate backward (slower but saves VRAM)")
-    return p.parse_args()
+    args = p.parse_args()
+    if args.N is not None:
+        if args.N < 2:
+            p.error("--N은 최소 2 이상이어야 합니다 (seed 1개 + 추가 문서 1개 이상).")
+        args.num_adv_docs = args.N - 1
+    return args
 
 
 if __name__ == "__main__":
