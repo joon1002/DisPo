@@ -68,7 +68,12 @@ def parse_args():
     p.add_argument("--num_adv_docs", type=int, default=4,
                    help="seed doc 포함 총 악성문서 수 N (doc0_seed + doc1~doc{N-1}). "
                         "예: N=4 → seed+doc1+doc2+doc3, N=2 → seed+doc1")
-    p.add_argument("--embed_device",  default="cuda")
+    p.add_argument("--N", type=int, default=None,
+                   help="seed 포함 총 악성문서 수. 지정 시 --num_adv_docs 대신 사용 (동일 의미).")
+    p.add_argument("--embed_device",    default="cuda")
+    p.add_argument("--gen_batch_size",  type=int, default=1,
+                   help="G 후보를 한 번에 몇 개씩 배치로 생성할지 (기본 1=순차). "
+                        "G와 같게 설정하면 G개를 한 번에 생성 → 가장 빠름.")
     p.add_argument("--allow_train_input", action="store_true")
     return p.parse_args()
 
@@ -85,6 +90,8 @@ def _check_not_train_input(input_path: str):
 
 def main():
     args = parse_args()
+    if args.N is not None:
+        args.num_adv_docs = args.N
     if not args.allow_train_input:
         _check_not_train_input(args.input)
 
@@ -138,6 +145,7 @@ def main():
     print("[tfidf] Vectorizer fitted")
 
     # N-1개 추가 생성 (seed 제외)
+    print(f"[cfg] gen_batch_size={args.gen_batch_size} (G={args.group_size}개 후보 중 {args.gen_batch_size}개씩 배치 생성)")
     out_df = v7.infer_poison_docs(
         model=model,
         tokenizer=tokenizer,
@@ -150,6 +158,7 @@ def main():
         device=device,
         max_prompt_tokens=v7.MAX_PROMPT_TOKENS,
         num_adv_docs=N - 1,
+        gen_batch_size=args.gen_batch_size,
     )
 
     out_df = out_df.rename(columns={"doc0": "doc0_seed"})

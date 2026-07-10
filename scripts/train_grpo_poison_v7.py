@@ -802,6 +802,7 @@ def infer_poison_docs(
     G: int, min_new: int, max_new: int, temp: float, device,
     max_prompt_tokens: int,
     num_adv_docs: int = 3,
+    gen_batch_size: int = 1,
 ) -> pd.DataFrame:
     model.eval()
     records = []
@@ -817,10 +818,13 @@ def infer_poison_docs(
             enc = tokenizer(prompt_text, return_tensors="pt",
                             truncation=True, max_length=max_prompt_tokens).to(device)
             candidates: List[str] = []
-            for _ in tqdm(range(G), desc=f"  pos{pos+1}", leave=False, ncols=80):
+            remaining = G
+            while remaining > 0:
+                bs = min(gen_batch_size, remaining)
+                enc_b = {k: v.repeat(bs, 1) for k, v in enc.items()}
                 try:
-                    out = model.generate(
-                        **enc,
+                    outs = model.generate(
+                        **enc_b,
                         min_new_tokens=min_new, max_new_tokens=max_new,
                         do_sample=True, temperature=temp,
                         top_p=TOP_P,
@@ -834,8 +838,8 @@ def infer_poison_docs(
                     if "probability tensor contains" not in str(e):
                         raise
                     tqdm.write("[warn] invalid probabilities; retrying greedy")
-                    out = model.generate(
-                        **enc,
+                    outs = model.generate(
+                        **enc_b,
                         min_new_tokens=min_new, max_new_tokens=max_new,
                         do_sample=False,
                         repetition_penalty=REPETITION_PEN,
@@ -844,8 +848,10 @@ def infer_poison_docs(
                         renormalize_logits=True, remove_invalid_values=True,
                         pad_token_id=tokenizer.eos_token_id,
                     )
-                comp = out[:, enc["input_ids"].shape[1]:]
-                candidates.append(tokenizer.decode(comp[0], skip_special_tokens=True).strip())
+                prompt_len = enc["input_ids"].shape[1]
+                for i in range(bs):
+                    candidates.append(tokenizer.decode(outs[i, prompt_len:], skip_special_tokens=True).strip())
+                remaining -= bs
 
             # target 포함 + quality pass 후보 우선
             valid_cands = [
