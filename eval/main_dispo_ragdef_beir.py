@@ -256,6 +256,9 @@ def parse_args():
                    help="If set, appended to output filenames")
     p.add_argument("--defense_model",     type=str, default=CONFIG["defense_model_name"],
                    help="SentenceTransformer model for RAGDefender Stage1+2 (default: paraphrase-MiniLM-L6-v2)")
+    p.add_argument("--input_csv",         type=str, default=None,
+                   help="원본 validate CSV (beir_title 컬럼). v2~v4 쿼리 normal docs 조회용. "
+                        "nq.json 및 train500 폴백에도 없는 쿼리에 사용.")
     return p.parse_args()
 
 
@@ -363,13 +366,25 @@ def main():
         docs_df = pd.read_csv(args.docs_csv)
         log(log_fp, f"[load] CSV rows: {len(docs_df)}")
 
-        # train500 폴백: BEIR test에 없는 쿼리는 nq_500_pd_7b.csv의 beir_title로 normal docs 조회
-        _aux_path = os.path.join(os.path.dirname(__file__), "../data/nq_500_pd_7b.csv")
+        # beir_title 폴백 매핑 구축 (train500 + input_csv)
+        # nq.json에 없는 쿼리는 beir_title로 corpus에서 normal docs 조회
         _q_to_title_lower = {}
+        _aux_path = os.path.join(os.path.dirname(__file__), "../data/nq_500_pd_7b.csv")
         if os.path.exists(_aux_path):
             _aux = pd.read_csv(_aux_path)
-            _q_to_title_lower = {str(r["query"]).strip(): str(r["beir_title"]).strip().lower()
-                                 for _, r in _aux.iterrows()}
+            if "beir_title" in _aux.columns:
+                _q_to_title_lower.update({
+                    str(r["query"]).strip(): str(r["beir_title"]).strip().lower()
+                    for _, r in _aux.iterrows()
+                })
+        if args.input_csv and os.path.exists(args.input_csv):
+            _inp = pd.read_csv(args.input_csv)
+            if "beir_title" in _inp.columns:
+                _q_to_title_lower.update({
+                    str(r["query"]).strip(): str(r["beir_title"]).strip().lower()
+                    for _, r in _inp.iterrows()
+                })
+                log(log_fp, f"[load] input_csv beir_title 폴백: {args.input_csv} ({len(_inp)}개 추가)")
         # corpus title 소문자 → 원본 매핑
         _lower_to_orig = {k.lower(): k for k in title_to_texts.keys()}
 

@@ -37,6 +37,8 @@ p.add_argument("--answers_json", default="../data/eval/nq.json")
 p.add_argument("--gpu_id",       type=int, default=0)
 p.add_argument("--ret_top_k",    type=int, default=5)
 p.add_argument("--ret_top_n",    type=int, default=20)
+p.add_argument("--input_csv",    default=None,
+               help="원본 validate CSV (beir_title 컬럼 포함). v2~v4 쿼리 normal docs 조회용.")
 args = p.parse_args()
 
 def rp(path):
@@ -44,7 +46,6 @@ def rp(path):
     return str(p_) if p_.is_absolute() else str((_ROOT / p_).resolve())
 
 DEVICE = f"cuda:{args.gpu_id}" if torch.cuda.is_available() else "cpu"
-os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
 
 # ─── corpus ──────────────────────────────────────────────────
 print("[load] BEIR NQ corpus...")
@@ -70,6 +71,14 @@ for pid, doc in corpus.items():
 with open(rp(args.answers_json)) as f:
     ia = json.load(f)
 q_to_beir_id = {x["question"].strip(): x["id"] for x in ia}
+
+# beir_title 폴백: v2~v4 쿼리는 nq.json에 없으므로 input_csv의 beir_title로 normal docs 조회
+q_to_title = {}
+if args.input_csv:
+    _inp = pd.read_csv(rp(args.input_csv))
+    if "beir_title" in _inp.columns:
+        q_to_title = dict(zip(_inp["query"].str.strip(), _inp["beir_title"].str.strip()))
+        print(f"[load] q_to_title from {args.input_csv}: {len(q_to_title)} entries")
 
 def get_normal_docs(qid):
     gt_ids = list(qrels.get(qid, {}).keys())
@@ -156,9 +165,11 @@ for _, row in docs_df.iterrows():
     query   = str(row["query"]).strip()
     target  = str(row["target_answer"]).strip()
     beir_id = q_to_beir_id.get(query)
-    if beir_id is None:
-        continue
-    normal_docs = get_normal_docs(beir_id)
+    if beir_id is not None:
+        normal_docs = get_normal_docs(beir_id)
+    else:
+        title = q_to_title.get(query, "")
+        normal_docs = title_to_texts.get(title, []) if title else []
     if not normal_docs:
         continue
     poison_docs = [str(row[c]) for c in DOC_COLS if pd.notna(row[c])]
@@ -207,7 +218,6 @@ def ragdefender_filter(docs, s_model, top_k):
 print("\n[eval] No-Defense: Contriever top-5 → Vicuna")
 nd_prec = nd_rec = nd_f1 = nd_asr = 0
 nd_top5_cache = []
-nd_top20_cache = []
 
 for entry in tqdm(query_data, desc="ND", ncols=90):
     cands   = entry["poison_docs"] + entry["normal_docs"]
@@ -215,7 +225,6 @@ for entry in tqdm(query_data, desc="ND", ncols=90):
     n_adv   = len(entry["poison_docs"])
 
     top5  = retrieve_topk(entry["query"], cands, args.ret_top_k)
-    top20 = retrieve_topk(entry["query"], cands, args.ret_top_n)
 
     hit = sum(1 for d in top5 if d in p_set)
     P   = hit / args.ret_top_k
@@ -227,18 +236,17 @@ for entry in tqdm(query_data, desc="ND", ncols=90):
 
     nd_prec += P; nd_rec += R; nd_f1 += F; nd_asr += asr
     nd_top5_cache.append(top5)
-    nd_top20_cache.append(top20)
 
 gc.collect(); torch.cuda.empty_cache()
 
 # ─── RAGDefender 평가 ────────────────────────────────────────
-print("\n[eval] RAGDefender: top-20 → MiniLM clustering → top-5 → Vicuna")
+print("\n[eval] RAGDefender: Contriever top-5 → MiniLM clustering filter → Vicuna")
 rd_s_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 rd_s_model.to(DEVICE)
 
 rd_asr = 0
 for i, entry in enumerate(tqdm(query_data, desc="RD", ncols=90)):
-    rd_docs = ragdefender_filter(nd_top20_cache[i], rd_s_model, args.ret_top_k)
+    rd_docs = ragdefender_filter(nd_top5_cache[i], rd_s_model, args.ret_top_k)
     resp    = vicuna_query(wrap_prompt(entry["query"], rd_docs))
     rd_asr += entry["target"].lower() in resp.lower()
 
