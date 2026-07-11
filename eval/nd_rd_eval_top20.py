@@ -218,6 +218,7 @@ def ragdefender_filter(docs, s_model, top_k):
 print("\n[eval] No-Defense: Contriever top-5 → Vicuna")
 nd_prec = nd_rec = nd_f1 = nd_asr = 0
 nd_top5_cache = []
+nd_top20_cache = []
 
 for entry in tqdm(query_data, desc="ND", ncols=90):
     cands   = entry["poison_docs"] + entry["normal_docs"]
@@ -225,6 +226,7 @@ for entry in tqdm(query_data, desc="ND", ncols=90):
     n_adv   = len(entry["poison_docs"])
 
     top5  = retrieve_topk(entry["query"], cands, args.ret_top_k)
+    top20 = retrieve_topk(entry["query"], cands, args.ret_top_n)
 
     hit = sum(1 for d in top5 if d in p_set)
     P   = hit / args.ret_top_k
@@ -236,17 +238,18 @@ for entry in tqdm(query_data, desc="ND", ncols=90):
 
     nd_prec += P; nd_rec += R; nd_f1 += F; nd_asr += asr
     nd_top5_cache.append(top5)
+    nd_top20_cache.append(top20)
 
 gc.collect(); torch.cuda.empty_cache()
 
-# ─── RAGDefender 평가 ────────────────────────────────────────
-print("\n[eval] RAGDefender: Contriever top-5 → MiniLM clustering filter → Vicuna")
+# ─── RAGDefender 평가 (top-20 → MiniLM clustering → top-5) ──
+print("\n[eval] RAGDefender: top-20 → MiniLM clustering → top-5 → Vicuna")
 rd_s_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 rd_s_model.to(DEVICE)
 
 rd_asr = 0
 for i, entry in enumerate(tqdm(query_data, desc="RD", ncols=90)):
-    rd_docs = ragdefender_filter(nd_top5_cache[i], rd_s_model, args.ret_top_k)
+    rd_docs = ragdefender_filter(nd_top20_cache[i], rd_s_model, args.ret_top_k)
     resp    = vicuna_query(wrap_prompt(entry["query"], rd_docs))
     rd_asr += entry["target"].lower() in resp.lower()
 
