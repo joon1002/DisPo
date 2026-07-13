@@ -1,11 +1,11 @@
 """
-main_dispo_extraval_ragdef.py — RAGDefender pipeline evaluation (standalone)
+main_dispo_extraval_ragdef.py — RAGDefender pipeline evaluation
 
 main_dispo_ragdef_beir.py와 동일한 파이프라인:
-  Contriever top-5 → RAGDefender 2-stage → Vicuna-7B → ASR 측정
+  Contriever top-5 → RAGDefender 2-stage → Vicuna-7B(FastChat) → ASR 측정
 
-v2/v3/v4 validate 쿼리 평가용. 어디서든 실행 가능 (eval/ 외부 OK).
-fastchat, beir 라이브러리 불필요.
+v2/v3/v4 등 임의 validate 쿼리 평가용. --input_csv로 쿼리 CSV 직접 지정.
+LLM: vicuna(기본) / mistral / llama3 / qwen2.5 선택 가능.
 
 Usage:
   CUDA_VISIBLE_DEVICES=1 HF_HUB_DISABLE_XET=1 python eval/main_dispo_extraval_ragdef.py \\
@@ -115,38 +115,6 @@ def wrap_prompt(question, context):
     else:
         context_str = context
     return _ACTIVE_PROMPT_TMPL.replace('[question]', question).replace('[context]', context_str)
-
-# ── DirectVicuna ─────────────────────────────────────────────────────────────
-class _DirectVicuna:
-    """fastchat 없이 HuggingFace 직접 로딩."""
-    provider = "vicuna"
-    name = _VICUNA_MODEL
-
-    def __init__(self, device: str):
-        self._tok = AutoTokenizer.from_pretrained(_VICUNA_MODEL, use_fast=True)
-        if self._tok.pad_token is None:
-            self._tok.pad_token = self._tok.eos_token
-        self._model = AutoModelForCausalLM.from_pretrained(
-            _VICUNA_MODEL, torch_dtype=torch.float16, device_map=device)
-        self._model.eval()
-        self._device = device
-
-    def query(self, prompt: str, first_line_only: bool = False) -> str:
-        try:
-            ids = self._tok(
-                prompt, return_tensors="pt",
-                truncation=True, max_length=2048
-            ).input_ids.to(self._device)
-            with torch.no_grad():
-                out = self._model.generate(
-                    ids, do_sample=True, temperature=0.1,
-                    max_new_tokens=100,
-                    pad_token_id=self._tok.eos_token_id)
-            raw = self._tok.decode(out[0][ids.shape[1]:], skip_special_tokens=True).strip()
-            return raw.split('\n')[0].strip() if first_line_only else raw
-        except Exception:
-            return ""
-
 
 class _FastchatVicuna:
     """공식 fastchat chat template 방식 Vicuna (ragatt venv 필요)."""
@@ -356,7 +324,7 @@ def log_json_block(fp, title, data):
 
 # ── argparse ─────────────────────────────────────────────────────────────────
 def parse_args():
-    p = argparse.ArgumentParser(description="RAGDefender extraval pipeline (standalone)")
+    p = argparse.ArgumentParser(description="RAGDefender extraval pipeline")
     p.add_argument("--docs_csv",        type=str, required=True,
                    help="inference 결과 CSV (poison docs)")
     p.add_argument("--input_csv",       type=str, default=None,
@@ -378,10 +346,6 @@ def parse_args():
                    help="생성 최대 토큰 수 직접 지정 (short_answer보다 우선)")
     p.add_argument("--first_line_only",  action="store_true",
                    help="응답의 첫 줄만 사용 (\\n 이후 아티팩트 제거)")
-    p.add_argument("--use_fastchat",     action="store_true", default=True,
-                   help="공식 fastchat chat template 방식 Vicuna 사용 (ragatt venv 필요) [기본값: True]")
-    p.add_argument("--no_fastchat",      dest="use_fastchat", action="store_false",
-                   help="FastChat 비활성화 (SA 포맷 direct Vicuna 사용)")
     return p.parse_args()
 
 # ── MAIN ─────────────────────────────────────────────────────────────────────
@@ -409,7 +373,6 @@ def main():
             "adv_per_query":   args.adv_per_query,
             "gpu_id":          args.gpu_id,
             "device":          device_str,
-            "use_fastchat":    args.use_fastchat,
             "first_line_only": args.first_line_only,
         })
 
@@ -438,12 +401,9 @@ def main():
         log(log_fp, f"[load] retrieval model: {ret_mid} ({ret_enc}) → {device_str}")
 
         llm_choice = args.llm_model
-        if llm_choice == "vicuna" and args.use_fastchat:
+        if llm_choice == "vicuna":
             log(log_fp, "[load] Vicuna-7B (fastchat chat template)...")
             llm = _FastchatVicuna()
-        elif llm_choice == "vicuna":
-            log(log_fp, "[load] Vicuna-7B...")
-            llm = _DirectVicuna(device_str)
         elif llm_choice == "mistral":
             log(log_fp, "[load] Mistral-7B-Instruct-v0.3...")
             llm = _DirectHFLLM(_MISTRAL_MODEL, device_str)
