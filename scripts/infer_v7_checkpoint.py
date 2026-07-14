@@ -65,7 +65,10 @@ def parse_args():
     p.add_argument("--group_size",    type=int, default=8)
     p.add_argument("--num_adv_docs",  type=int, default=3,
                    help="쿼리당 생성할 악성 문서 수 (N), 기본 3 → doc0_seed+doc1~doc3=4개")
-    p.add_argument("--embed_device",  default="cuda")
+    p.add_argument("--embed_device",    default="cuda")
+    p.add_argument("--gen_batch_size",  type=int, default=1,
+                   help="G 후보를 한 번에 몇 개씩 배치로 생성할지 (기본 1=순차). "
+                        "G와 같게 설정하면 가장 빠름.")
     p.add_argument("--allow_train_input", action="store_true",
                    help="훈련 쿼리 데이터셋 입력 허용 (기본 비허용)")
     return p.parse_args()
@@ -147,6 +150,7 @@ def main():
         device=device,
         max_prompt_tokens=v7.MAX_PROMPT_TOKENS,
         num_adv_docs=args.num_adv_docs,
+        gen_batch_size=args.gen_batch_size,
     )
 
     # pipeline이 기대하는 컬럼명: doc0_seed (not doc0)
