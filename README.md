@@ -162,20 +162,34 @@ CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_v7_e5.py \
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_checkpoint.py \
-    --checkpoint results/grpo_v7_run1/final_model \
-    --input      data/nq100_validate.csv \
-    --output     results/grpo_v7_run1/pd_eval100_v7.csv \
-    --group_size 8
+    --checkpoint    results/grpo_v7_run1/final_model \
+    --input         data/nq100_validate.csv \
+    --output        results/grpo_v7_run1/pd_eval100_v7.csv \
+    --group_size    8 \
+    --gen_batch_size 8
 ```
 
 ### v7-e5
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_e5_checkpoint.py \
-    --checkpoint results/grpo_v7_e5_run1/final_model \
-    --input      data/nq100_validate.csv \
-    --output     results/grpo_v7_e5_run1/pd_eval100_v7_e5.csv \
-    --group_size 8
+    --checkpoint    results/grpo_v7_e5_run1/final_model \
+    --input         data/nq100_validate.csv \
+    --output        results/grpo_v7_e5_run1/pd_eval100_v7_e5.csv \
+    --group_size    8 \
+    --gen_batch_size 8
+```
+
+### v7-n (N 가변)
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_n.py \
+    --checkpoint    results/grpo_v7_run1/final_model \
+    --input         data/nq100_validate.csv \
+    --output        results/grpo_v7_run1/pd_eval100_v7_n6.csv \
+    --N 6 \
+    --group_size    8 \
+    --gen_batch_size 8
 ```
 
 ### Inference 인자
@@ -187,6 +201,8 @@ CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_e5_checkpoint.py \
 | `--output` | `results/.../pd_eval100.csv` | 출력 CSV 경로 |
 | `--group_size` | `8` | 후보 생성 수 **(G)**, best 1개 선택 |
 | `--num_adv_docs` | `3` | 쿼리당 생성할 악성 문서 수 **(N)** |
+| `--N` | `None` | `--num_adv_docs`와 동일 의미, 지정 시 우선 적용 (`infer_v7_n.py`만) |
+| `--gen_batch_size` | `1` | G 후보를 한 번에 몇 개씩 생성할지. **`--group_size`와 동일값으로 설정하면 가장 빠름** |
 | `--embed_device` | `cuda` | 임베딩 모델 디바이스 |
 | `--gpu_id` | `0` | CUDA 디바이스 ID |
 
