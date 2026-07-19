@@ -1,4 +1,3 @@
-from .PaLM2 import PaLM2
 from .Vicuna import Vicuna
 from .GPT import GPT
 from .Llama import Llama
@@ -18,9 +17,7 @@ def create_model(config_path):
     config = load_json(config_path)
 
     provider = config["model_info"]["provider"].lower()
-    if provider == 'palm2':
-        model = PaLM2(config)
-    elif provider == 'vicuna':
+    if provider == 'vicuna':
         model = Vicuna(config)
     elif provider == 'gpt':
         model = GPT(config)
