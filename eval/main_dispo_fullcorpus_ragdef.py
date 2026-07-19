@@ -7,7 +7,7 @@ retriever로 전체 코퍼스에서 top-k 검색 → RAGDefender 2-stage → Vic
 Supported retrievers (--retrieval_model):
   contriever         facebook/contriever              (dot-product, mean-pool)
   contriever-msmarco facebook/contriever-msmarco      (dot-product, mean-pool)
-  dpr                standard DPR: question encoder for query, context encoder for docs
+  dpr                legacy DPR: context encoder for both query and docs by default
   ance               sentence-transformers/msmarco-roberta-base-ance-firstp
   bge-base           BAAI/bge-base-en-v1.5
   e5-base            intfloat/e5-base-v2
@@ -372,9 +372,9 @@ def main():
     p.add_argument("--seed",             type=int, default=12)
     p.add_argument("--embed_batch",      type=int, default=512)
     p.add_argument("--run_label",        type=str, default="")
-    p.add_argument("--dpr_query_encoder", type=str, default="standard",
+    p.add_argument("--dpr_query_encoder", type=str, default="ctx",
                    choices=["standard", "ctx"],
-                   help="DPR query encoder: standard=question encoder, ctx=legacy context encoder")
+                   help="DPR query encoder: ctx=legacy context encoder, standard=question encoder")
     p.add_argument("--clean_topn_cache", type=str, default="",
                    help="미리 계산한 clean corpus top-N cache(.pt). 있으면 full corpus scoring 대신 cache+adv 재랭킹")
     p.add_argument("--embed_only",       action="store_true",
