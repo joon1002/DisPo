@@ -52,26 +52,30 @@ from tqdm import tqdm
 
 _ROOT = Path(__file__).resolve().parent
 
+# 서버마다 대용량 데이터 저장 위치가 다를 수 있어 환경변수로 override 가능
+# (예: export DISPO_DATA_ROOT=/data_ssd/joonhyung)
+_DATA_ROOT = os.environ.get("DISPO_DATA_ROOT", "/data/joonhyung")
+
 # ── Dataset 설정 ──────────────────────────────────────────────────────────────
 _DS_CFG = {
     "nq": {
-        "corpus_path":   "/data/joonhyung/datasets/nq/corpus.jsonl",
-        "qrels_paths":   ["/data/joonhyung/datasets/nq/qrels/test.tsv"],
+        "corpus_path":   f"{_DATA_ROOT}/datasets/nq/corpus.jsonl",
+        "qrels_paths":   [f"{_DATA_ROOT}/datasets/nq/qrels/test.tsv"],
         "queries_jsonl": None,
         "answers_json":  str(_ROOT.parent / "data/eval/nq.json"),
-        "embed_cache_dir": "/data/joonhyung/datasets/nq",
+        "embed_cache_dir": f"{_DATA_ROOT}/datasets/nq",
         "log_subdir":    "txt_logs_fullcorpus_nq",
     },
     "hotpotqa": {
-        "corpus_path":   "/data/joonhyung/datasets/hotpotqa/corpus.jsonl",
+        "corpus_path":   f"{_DATA_ROOT}/datasets/hotpotqa/corpus.jsonl",
         "qrels_paths":   [
-            "/data/joonhyung/datasets/hotpotqa/qrels/train.tsv",
-            "/data/joonhyung/datasets/hotpotqa/qrels/dev.tsv",
-            "/data/joonhyung/datasets/hotpotqa/qrels/test.tsv",
+            f"{_DATA_ROOT}/datasets/hotpotqa/qrels/train.tsv",
+            f"{_DATA_ROOT}/datasets/hotpotqa/qrels/dev.tsv",
+            f"{_DATA_ROOT}/datasets/hotpotqa/qrels/test.tsv",
         ],
-        "queries_jsonl": "/data/joonhyung/datasets/hotpotqa/queries.jsonl",
+        "queries_jsonl": f"{_DATA_ROOT}/datasets/hotpotqa/queries.jsonl",
         "answers_json":  None,
-        "embed_cache_dir": "/data/joonhyung/datasets/hotpotqa",
+        "embed_cache_dir": f"{_DATA_ROOT}/datasets/hotpotqa",
         "log_subdir":    "txt_logs_fullcorpus_hotpotqa",
     },
 }
@@ -273,7 +277,10 @@ def find_num_adv_agg_with_stage1(text_list, s_model):
     n = len(text_list)
     n1, n0 = sum(labels), n - sum(labels)
     nmin = min(n1, n0)
-    num_tfidf = find_num_adv_tfidf(text_list)
+    try:
+        num_tfidf = find_num_adv_tfidf(text_list)
+    except ValueError:
+        num_tfidf = 0  # 모든 문서가 불용어만 포함 시 fallback
     if n1 > 0 and num_tfidf <= int(n / 2):
         n_adv = nmin
         adv_label = 1 if n1 <= n0 else 0

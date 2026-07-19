@@ -11,13 +11,19 @@ set -euo pipefail
 RET="$1"
 GPU="$2"
 
-VENV=/data/joonhyung/DisPo/.venv/bin/python3
-EVAL=/data/joonhyung/DisPo/eval/main_dispo_fullcorpus_ragdef.py
-DOCS_SEED=/data/joonhyung/DisPo/data/generated/pd_eval100_merged_seed.csv
-DOCS_NOSEED=/data/joonhyung/DisPo/data/generated/pd_eval100_merged_noseed.csv
-LOGROOT=/data/joonhyung/DisPo/eval/txt_logs_fullcorpus_nq
-OUT=/data/joonhyung/DisPo/eval/results_${RET}_gpu${GPU}.json
-LOG=/data/joonhyung/DisPo/logs/split_${RET}_gpu${GPU}.log
+# 이 스크립트(.../DisPo/eval/)의 실제 위치를 기준으로 경로를 자동으로 잡음
+# → DisPo를 어느 경로에 clone하든(심볼릭 링크 불필요) 그대로 동작
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DISPO_ROOT="$(dirname "$SCRIPT_DIR")"
+export DISPO_DATA_ROOT="${DISPO_DATA_ROOT:-$(dirname "$DISPO_ROOT")}"   # datasets/ 상위 경로, override 가능
+
+VENV="$DISPO_ROOT/.venv/bin/python3"
+EVAL="$DISPO_ROOT/eval/main_dispo_fullcorpus_ragdef.py"
+DOCS_SEED="$DISPO_ROOT/data/generated/pd_eval100_merged_seed.csv"
+DOCS_NOSEED="$DISPO_ROOT/data/generated/pd_eval100_merged_noseed.csv"
+LOGROOT="$DISPO_ROOT/eval/txt_logs_fullcorpus_nq"
+OUT="$DISPO_ROOT/eval/results_${RET}_gpu${GPU}.json"
+LOG="$DISPO_ROOT/logs/split_${RET}_gpu${GPU}.log"
 
 ts() { date '+[%Y-%m-%d %H:%M:%S]'; }
 

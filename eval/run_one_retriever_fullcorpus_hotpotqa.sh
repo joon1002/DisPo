@@ -15,11 +15,17 @@ DOCS_CSV="$3"
 ADV_PER_QUERY="$4"
 RUN_LABEL="${5:-hotpotqa_${RET}_fullcorpus}"
 
-VENV=/data/joonhyung/DisPo/.venv/bin/python3
-EVAL=/data/joonhyung/DisPo/eval/main_dispo_fullcorpus_ragdef.py
-LOGROOT=/data/joonhyung/DisPo/eval/txt_logs_fullcorpus_hotpotqa
-OUT=/data/joonhyung/DisPo/eval/results_hotpotqa_${RET}_gpu${GPU}.json
-LOG=/data/joonhyung/DisPo/logs/split_hotpotqa_${RET}_gpu${GPU}.log
+# 이 스크립트(.../DisPo/eval/)의 실제 위치를 기준으로 경로를 자동으로 잡음
+# → DisPo를 어느 경로에 clone하든(심볼릭 링크 불필요) 그대로 동작
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DISPO_ROOT="$(dirname "$SCRIPT_DIR")"
+export DISPO_DATA_ROOT="${DISPO_DATA_ROOT:-$(dirname "$DISPO_ROOT")}"   # datasets/ 상위 경로, override 가능
+
+VENV="$DISPO_ROOT/.venv/bin/python3"
+EVAL="$DISPO_ROOT/eval/main_dispo_fullcorpus_ragdef.py"
+LOGROOT="$DISPO_ROOT/eval/txt_logs_fullcorpus_hotpotqa"
+OUT="$DISPO_ROOT/eval/results_hotpotqa_${RET}_gpu${GPU}.json"
+LOG="$DISPO_ROOT/logs/split_hotpotqa_${RET}_gpu${GPU}.log"
 
 ts() { date '+[%Y-%m-%d %H:%M:%S]'; }
 
