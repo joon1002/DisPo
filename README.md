@@ -17,18 +17,19 @@ cd DisPo
 ### 2. Python 환경 구성
 
 ```bash
-python -m venv .venv
+python3.8 -m venv .venv
 source .venv/bin/activate
 
-# 훈련/inference용
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# 훈련/inference용 (검증된 조합: CUDA 12.1)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 pip install transformers peft accelerate sentence-transformers scikit-learn tqdm pandas
 
 # 성능평가 추가 패키지 (eval/ 사용 시)
 pip install beir
+pip install fschat==0.2.36    # LLM(Vicuna-7B) 생성 단계에 필수 — 누락 시 ImportError
 ```
 
-### 3. 전체 흐름 (v7 기준)
+### 3. 전체 흐름 (v7 기준, full-corpus 성능평가가 기본)
 
 ```bash
 # Step 1: 훈련 (GPU 0, ~8h)
@@ -42,16 +43,17 @@ CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_checkpoint.py \
     --input      data/nq100_validate.csv \
     --output     results/grpo_v7_run1/pd_eval100_v7.csv
 
-# Step 3: 성능평가 (eval/ 디렉토리에서)
+# Step 3: 성능평가 — full-corpus 방식이 기본(default)
+# (사전 준비: NQ/HotpotQA corpus 다운로드 — "직접 corpus를 받는 방법" 섹션 참고)
 cd eval/
-CUDA_VISIBLE_DEVICES=0 python main_dispo_ragdef_beir.py \
-    --retrieval_model   contriever \
-    --model_config_path model_configs/vicuna7b_config.json \
-    --model_name        vicuna \
-    --docs_csv          ../results/grpo_v7_run1/pd_eval100_v7.csv \
-    --adv_per_query     4 --top_k 5
+CUDA_VISIBLE_DEVICES=0 python main_dispo_fullcorpus_ragdef.py \
+    --dataset         nq \
+    --retrieval_model contriever \
+    --docs_csv        ../results/grpo_v7_run1/pd_eval100_v7.csv \
+    --adv_per_query   4 --top_k 5 --gpu_id 0
 ```
 
+> full-corpus가 기본 평가 방식입니다(실제 RAG 환경과 동일하게 전체 corpus에서 top-k 검색). `main_dispo_ragdef_beir.py`/`main_dispo_extraval_ragdef.py`는 쿼리당 소수 후보 문서끼리만 경쟁시키는 legacy 방식으로, 8검색기 비교 등 특수 목적에만 사용합니다.
 > 성능평가 전체 가이드는 [eval/README.md](eval/README.md) 참고
 
 ---
@@ -86,12 +88,16 @@ DisPo/
 
 ## 요구 환경
 
-- Python 3.10+
-- PyTorch 2.x (CUDA 11.8+)
-- GPU: 24GB+ VRAM 권장 (A100/H100)
+- Python 3.8 (검증된 버전 — 다른 버전은 미검증)
+- PyTorch 2.4.1 (CUDA 12.1) — `torch==2.4.1+cu121`, `cudnn 90100`
+- transformers 4.46.3, sentence-transformers 3.2.1
+- fschat 0.2.36 (Vicuna-7B 생성 단계 필수, `import fastchat`로 사용)
+- GPU: 24GB+ VRAM 권장 (A100/H100), full-corpus eval은 검색기당 corpus 임베딩 캐시로
+  NQ 기준 ~8GB, HotpotQA 기준 ~16GB 디스크가 추가로 필요
 
 ```bash
 pip install transformers peft accelerate sentence-transformers scikit-learn tqdm pandas
+pip install fschat==0.2.36
 ```
 
 모델 다운로드 (최초 실행 시 HuggingFace에서 자동):
@@ -100,14 +106,31 @@ pip install transformers peft accelerate sentence-transformers scikit-learn tqdm
 - Retriever(v7): `facebook/contriever`
 - Retriever(v7-e5): `intfloat/e5-base-v2`
 - Defense filter: `paraphrase-MiniLM-L6-v2`
+- full-corpus 8검색기 비교 시 추가: `contriever-msmarco`, `sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base`(dpr),
+  `sentence-transformers/msmarco-roberta-base-ance-firstp`(ance), `BAAI/bge-base-en-v1.5`(bge-base),
+  `intfloat/e5-base-v2`(e5-base), `thenlper/gte-base`(gte-base), `sentence-transformers/all-mpnet-base-v2`(mpnet)
 -------
-방어 포함 성능평가에 필요한 명령어 -  직접 NQ corpus를 받는 방법
+방어 포함 성능평가(full-corpus, 기본 방식)에 필요한 corpus 직접 받는 방법
 
-cd ~/DisPo/data
+**NQ** (2.68M passages, ~1.5GB)
+```bash
+mkdir -p /data/joonhyung/datasets/nq && cd /data/joonhyung/datasets/nq
 wget https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/nq.zip
 unzip nq.zip
-mv nq/corpus.jsonl corpus.jsonl
+mv nq/corpus.jsonl nq/queries.jsonl nq/qrels .
 rm -rf nq nq.zip
+```
+
+**HotpotQA** (5.23M passages, ~2.2GB)
+```bash
+mkdir -p /data/joonhyung/datasets/hotpotqa && cd /data/joonhyung/datasets/hotpotqa
+wget https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/hotpotqa.zip
+unzip hotpotqa.zip
+mv hotpotqa/corpus.jsonl hotpotqa/queries.jsonl hotpotqa/qrels .
+rm -rf hotpotqa hotpotqa.zip
+```
+
+> `eval/main_dispo_fullcorpus_ragdef.py`의 `_DS_CFG`에 경로가 `/data/joonhyung/datasets/{nq,hotpotqa}/`로 고정되어 있으므로 반드시 이 경로에 둬야 합니다.
 
 ---
 

@@ -1,4 +1,7 @@
 """
+[LEGACY] 쿼리당 소수 후보 문서끼리만 경쟁시키는 방식입니다.
+기본 성능평가는 main_dispo_fullcorpus_ragdef.py(full-corpus 검색)를 사용하세요.
+
 main_dispo_extraval_ragdef.py — RAGDefender pipeline evaluation
 
 main_dispo_ragdef_beir.py와 동일한 파이프라인:

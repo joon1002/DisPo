@@ -1,4 +1,8 @@
 """
+[LEGACY] 쿼리당 소수 후보 문서(4~124개)끼리만 경쟁시키는 방식입니다.
+기본 성능평가는 main_dispo_fullcorpus_ragdef.py(full-corpus 검색)를 사용하세요.
+이 스크립트는 8검색기 비교 등 특수 목적에만 사용합니다.
+
 main_dispo_ragdef_beir.py — RAGDefender pipeline evaluation
 
 Data:
