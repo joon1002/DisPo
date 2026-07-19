@@ -23,7 +23,7 @@ class Vicuna(Model):
             device=self.device,
             num_gpus=self.num_gpus,
             max_gpu_memory=self.max_gpu_memory,
-            # dtype=torch.float16,
+            dtype=torch.float16,
             load_8bit=self.load_8bit,
             cpu_offloading=self.cpu_offloading,
             revision=self.revision,
