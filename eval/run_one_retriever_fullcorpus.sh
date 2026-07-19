@@ -73,12 +73,19 @@ echo "$(ts) [noseed] run_dir=$NOSEED_DIR"
 import json
 js  = json.load(open("$SEED_DIR/final.json"))
 jns = json.load(open("$NOSEED_DIR/final.json"))
-result = {"retriever": "$RET",
-          "seed_nd": js["no_defense"]["ASR"],   "seed_rd": js["ragdefender"]["ASR"],
-          "noseed_nd": jns["no_defense"]["ASR"], "noseed_rd": jns["ragdefender"]["ASR"]}
+
+def m(d, key):
+    nd, rd = d["no_defense"], d["ragdefender"]
+    return {"nd_asr": nd["ASR"], "nd_precision": nd["poison_precision"],
+            "nd_recall": nd["poison_recall"], "nd_f1": nd["poison_f1"],
+            "rd_asr": rd["ASR"], "rd_precision": rd["poison_precision_after"],
+            "rd_recall": rd["poison_recall_after"], "rd_f1": rd["poison_f1_after"]}
+
+result = {"retriever": "$RET", "seed": m(js, "seed"), "noseed": m(jns, "noseed")}
 json.dump(result, open("$OUT", "w"), indent=2)
-print(f"  seed  -> ND={result['seed_nd']*100:.1f}%  RD={result['seed_rd']*100:.1f}%")
-print(f"  noseed-> ND={result['noseed_nd']*100:.1f}%  RD={result['noseed_rd']*100:.1f}%")
+for label, d in (("seed", result["seed"]), ("noseed", result["noseed"])):
+    print(f"  {label:6s}-> ND: ASR={d['nd_asr']*100:.1f}% P={d['nd_precision']*100:.1f}% R={d['nd_recall']*100:.1f}% F1={d['nd_f1']*100:.1f}%"
+          f"  |  RD: ASR={d['rd_asr']*100:.1f}% P={d['rd_precision']*100:.1f}% R={d['rd_recall']*100:.1f}% F1={d['rd_f1']*100:.1f}%")
 PYEOF
 
 echo "$(ts) ===== $RET 완료 (결과: $OUT) ====="

@@ -60,10 +60,15 @@ echo "$(ts) run_dir=$RUN_DIR"
 "$VENV" - <<PYEOF
 import json
 js = json.load(open("$RUN_DIR/final.json"))
+nd, rd = js["no_defense"], js["ragdefender"]
 result = {"retriever": "$RET",
-          "nd_asr": js["no_defense"]["ASR"], "rd_asr": js["ragdefender"]["ASR"]}
+          "nd_asr": nd["ASR"], "nd_precision": nd["poison_precision"],
+          "nd_recall": nd["poison_recall"], "nd_f1": nd["poison_f1"],
+          "rd_asr": rd["ASR"], "rd_precision": rd["poison_precision_after"],
+          "rd_recall": rd["poison_recall_after"], "rd_f1": rd["poison_f1_after"]}
 json.dump(result, open("$OUT", "w"), indent=2)
-print(f"  ND-ASR={result['nd_asr']*100:.1f}%  RD-ASR={result['rd_asr']*100:.1f}%")
+print(f"  ND: ASR={result['nd_asr']*100:.1f}%  P={result['nd_precision']*100:.1f}%  R={result['nd_recall']*100:.1f}%  F1={result['nd_f1']*100:.1f}%")
+print(f"  RD: ASR={result['rd_asr']*100:.1f}%  P={result['rd_precision']*100:.1f}%  R={result['rd_recall']*100:.1f}%  F1={result['rd_f1']*100:.1f}%")
 PYEOF
 
 echo "$(ts) ===== HotpotQA $RET 완료 (결과: $OUT) ====="

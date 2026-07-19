@@ -7,7 +7,7 @@ retriever로 전체 코퍼스에서 top-k 검색 → RAGDefender 2-stage → Vic
 Supported retrievers (--retrieval_model):
   contriever         facebook/contriever              (dot-product, mean-pool)
   contriever-msmarco facebook/contriever-msmarco      (dot-product, mean-pool)
-  dpr                sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base
+  dpr                standard DPR: question encoder for query, context encoder for docs
   ance               sentence-transformers/msmarco-roberta-base-ance-firstp
   bge-base           BAAI/bge-base-en-v1.5
   e5-base            intfloat/e5-base-v2
@@ -90,6 +90,9 @@ _RETRIEVAL_ALIAS = {
     "gte-base":           "thenlper/gte-base",
     "mpnet":              "sentence-transformers/all-mpnet-base-v2",
 }
+
+_DPR_QUESTION_ENCODER = "sentence-transformers/facebook-dpr-question_encoder-single-nq-base"
+_DPR_CONTEXT_ENCODER  = "sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base"
 
 # Contriever 계열: mean-pool + dot-product (비정규화)
 _CONTRIEVER_FAMILY = {"facebook/contriever", "facebook/contriever-msmarco"}
@@ -176,13 +179,17 @@ def build_or_load_corpus_embs(corpus_texts, cache_path, encoder_fn, log_fn, batc
 # ── Full-corpus retrieval ─────────────────────────────────────────────────────
 def retrieve_fullcorpus_topk(query, adv_docs, corpus_embs_gpu, corpus_texts,
                               encode_fn, use_cosine, device, top_k,
-                              q_prefix="", d_prefix=""):
+                              q_prefix="", d_prefix="",
+                              query_encode_fn=None, doc_encode_fn=None):
     """adv_docs를 전체 corpus에 inject한 뒤 top-k 검색."""
+    query_encode_fn = query_encode_fn or encode_fn
+    doc_encode_fn = doc_encode_fn or encode_fn
+
     q_text = q_prefix + query if q_prefix else query
     d_texts = [d_prefix + d if d_prefix else d for d in adv_docs]
 
-    adv_embs = encode_fn(d_texts).to(device).to(corpus_embs_gpu.dtype)  # (N_adv, D)
-    q_emb    = encode_fn([q_text]).to(device).to(corpus_embs_gpu.dtype)  # (1, D)
+    adv_embs = doc_encode_fn(d_texts).to(device).to(corpus_embs_gpu.dtype)    # (N_adv, D)
+    q_emb    = query_encode_fn([q_text]).to(device).to(corpus_embs_gpu.dtype) # (1, D)
 
     if use_cosine:
         adv_embs = F.normalize(adv_embs, dim=-1)
@@ -202,6 +209,77 @@ def retrieve_fullcorpus_topk(query, adv_docs, corpus_embs_gpu, corpus_texts,
             retrieved_docs.append(corpus_texts[idx])
         else:
             retrieved_docs.append(adv_docs[idx - n_corpus])
+            adv_positions.add(rank)
+
+    return retrieved_docs, adv_positions, len(adv_positions)
+
+
+def load_clean_topn_cache(path, args, model_hf_name, log_fp):
+    cache = torch.load(path, map_location="cpu", weights_only=True)
+    meta = cache.get("meta", {})
+    if meta.get("dataset") != args.dataset:
+        raise ValueError(f"clean_topn_cache dataset mismatch: {meta.get('dataset')} != {args.dataset}")
+    if meta.get("retrieval_model") != args.retrieval_model:
+        raise ValueError(
+            f"clean_topn_cache retriever mismatch: {meta.get('retrieval_model')} != {args.retrieval_model}"
+        )
+    if meta.get("model_hf") != model_hf_name:
+        raise ValueError(f"clean_topn_cache model mismatch: {meta.get('model_hf')} != {model_hf_name}")
+    if args.retrieval_model == "dpr":
+        cache_mode = meta.get("dpr_query_encoder", "ctx")
+        if cache_mode != args.dpr_query_encoder:
+            raise ValueError(
+                f"clean_topn_cache DPR mode mismatch: {cache_mode} != {args.dpr_query_encoder}"
+            )
+    if int(meta.get("top_n", 0)) < args.top_k:
+        raise ValueError(f"clean_topn_cache top_n={meta.get('top_n')} < top_k={args.top_k}")
+
+    queries = [str(q).strip() for q in cache["queries"]]
+    cache["query_to_row"] = {q: i for i, q in enumerate(queries)}
+    cache["top_indices"] = cache["top_indices"].long()
+    cache["top_scores"] = cache["top_scores"].float()
+    log(log_fp, f"[topn] clean top-{meta.get('top_n')} cache 로드: {path}")
+    log(log_fp, f"[topn] queries={len(queries):,} dtype={meta.get('score_dtype')} scorer={meta.get('scorer')}")
+    return cache
+
+
+def retrieve_cached_topn_topk(query, adv_docs, clean_topn_cache, corpus_texts,
+                              encode_fn, use_cosine, device, top_k,
+                              q_prefix="", d_prefix="",
+                              query_encode_fn=None, doc_encode_fn=None):
+    """clean top-N cache와 adv_docs를 합쳐 top-k 검색."""
+    query_encode_fn = query_encode_fn or encode_fn
+    doc_encode_fn = doc_encode_fn or encode_fn
+
+    query_key = str(query).strip()
+    row_idx = clean_topn_cache["query_to_row"].get(query_key)
+    if row_idx is None:
+        raise KeyError(f"query not found in clean_topn_cache: {query_key}")
+
+    clean_indices = clean_topn_cache["top_indices"][row_idx]
+    clean_scores = clean_topn_cache["top_scores"][row_idx]
+
+    q_text = q_prefix + query if q_prefix else query
+    d_texts = [d_prefix + d if d_prefix else d for d in adv_docs]
+
+    adv_embs = doc_encode_fn(d_texts).to(device).half()
+    q_emb = query_encode_fn([q_text]).to(device).half()
+    if use_cosine:
+        adv_embs = F.normalize(adv_embs, dim=-1)
+        q_emb = F.normalize(q_emb, dim=-1)
+    adv_scores = torch.mm(adv_embs, q_emb.T).squeeze(1).float().cpu()
+
+    all_scores = torch.cat([clean_scores, adv_scores], dim=0)
+    top_local = all_scores.topk(top_k).indices.tolist()
+
+    retrieved_docs = []
+    adv_positions = set()
+    n_clean = clean_indices.numel()
+    for rank, idx in enumerate(top_local):
+        if idx < n_clean:
+            retrieved_docs.append(corpus_texts[int(clean_indices[idx])])
+        else:
+            retrieved_docs.append(adv_docs[idx - n_clean])
             adv_positions.add(rank)
 
     return retrieved_docs, adv_positions, len(adv_positions)
@@ -324,13 +402,21 @@ def main():
     p.add_argument("--seed",             type=int, default=12)
     p.add_argument("--embed_batch",      type=int, default=512)
     p.add_argument("--run_label",        type=str, default="")
+    p.add_argument("--dpr_query_encoder", type=str, default="standard",
+                   choices=["standard", "ctx"],
+                   help="DPR query encoder: standard=question encoder, ctx=legacy context encoder")
+    p.add_argument("--clean_topn_cache", type=str, default="",
+                   help="미리 계산한 clean corpus top-N cache(.pt). 있으면 full corpus scoring 대신 cache+adv 재랭킹")
     p.add_argument("--embed_only",       action="store_true",
                    help="corpus 임베딩만 수행하고 eval 없이 종료")
     args = p.parse_args()
 
     model_hf_name = _RETRIEVAL_ALIAS[args.retrieval_model]
     is_contriever_family = model_hf_name in _CONTRIEVER_FAMILY
+    is_standard_dpr = args.retrieval_model == "dpr" and args.dpr_query_encoder == "standard"
     use_cosine = not is_contriever_family
+    if is_standard_dpr:
+        use_cosine = False
     q_prefix = _QUERY_PREFIXES.get(model_hf_name, "")
     d_prefix = _DOC_PREFIXES.get(model_hf_name, "")
 
@@ -352,7 +438,8 @@ def main():
             "model_hf": model_hf_name, "docs_csv": args.docs_csv,
             "top_k": args.top_k, "adv_per_query": args.adv_per_query,
             "device": device, "embed_batch": args.embed_batch,
-            "use_cosine": use_cosine,
+            "use_cosine": use_cosine, "dpr_query_encoder": args.dpr_query_encoder,
+            "clean_topn_cache": args.clean_topn_cache,
         })
 
         # ── Retriever 로딩 ────────────────────────────────────────────────────
@@ -366,7 +453,30 @@ def main():
             def encode_fn(texts):
                 return contriever_encode(texts, ctv_mod, ctv_tok, device, batch_size=64)
 
+            query_encode_fn = encode_fn
+            doc_encode_fn = encode_fn
             log(log_fp, f"[load] Contriever-family 완료 → {device}")
+        elif is_standard_dpr:
+            ctx_model = SentenceTransformer(_DPR_CONTEXT_ENCODER, trust_remote_code=True).to(device)
+            q_model = SentenceTransformer(_DPR_QUESTION_ENCODER, trust_remote_code=True).to(device)
+            ctx_model.eval()
+            q_model.eval()
+
+            def _st_encode(model, texts):
+                with torch.no_grad():
+                    return model.encode(
+                        texts, batch_size=256, convert_to_tensor=True,
+                        normalize_embeddings=False, show_progress_bar=False,
+                    ).cpu()
+
+            def doc_encode_fn(texts):
+                return _st_encode(ctx_model, texts)
+
+            def query_encode_fn(texts):
+                return _st_encode(q_model, texts)
+
+            encode_fn = doc_encode_fn
+            log(log_fp, f"[load] DPR standard 완료 → q={_DPR_QUESTION_ENCODER}, doc={_DPR_CONTEXT_ENCODER}, scorer=dot")
         else:
             st_model = SentenceTransformer(model_hf_name, trust_remote_code=True)
             st_model = st_model.to(device)
@@ -379,6 +489,8 @@ def main():
                         normalize_embeddings=False, show_progress_bar=False,
                     ).cpu()
 
+            query_encode_fn = encode_fn
+            doc_encode_fn = encode_fn
             log(log_fp, f"[load] SentenceTransformer 완료 → {device}")
 
         # ── Corpus 로딩 & 임베딩 ──────────────────────────────────────────────
@@ -396,24 +508,32 @@ def main():
 
         def corpus_encoder_fn(texts):
             doc_texts = [d_prefix + t if d_prefix else t for t in texts]
-            return encode_fn(doc_texts)
+            return doc_encode_fn(doc_texts)
 
-        corpus_embs = build_or_load_corpus_embs(
-            corpus_texts, cache_path,
-            corpus_encoder_fn, lambda m: log(log_fp, m),
-            batch_size=args.embed_batch,
-        )
+        clean_topn_cache = None
+        corpus_embs_gpu = None
+        if args.clean_topn_cache:
+            if args.embed_only:
+                raise ValueError("--embed_only와 --clean_topn_cache는 같이 사용할 수 없습니다.")
+            clean_topn_cache = load_clean_topn_cache(args.clean_topn_cache, args, model_hf_name, log_fp)
+            log(log_fp, "[embed] clean top-N cache 사용 → corpus embedding GPU 전송 생략")
+        else:
+            corpus_embs = build_or_load_corpus_embs(
+                corpus_texts, cache_path,
+                corpus_encoder_fn, lambda m: log(log_fp, m),
+                batch_size=args.embed_batch,
+            )
 
-        if args.embed_only:
-            log(log_fp, "[embed_only] 임베딩 완료. 종료.")
-            return
+            if args.embed_only:
+                log(log_fp, "[embed_only] 임베딩 완료. 종료.")
+                return
 
-        # GPU에 상주 (cosine 검색 시 미리 정규화, float16으로 메모리 절약 ~4GB)
-        log(log_fp, f"[embed] GPU 전송 중... ({corpus_embs.shape[0]:,} × {corpus_embs.shape[1]})")
-        if use_cosine:
-            corpus_embs = F.normalize(corpus_embs.float(), dim=-1)
-        corpus_embs_gpu = corpus_embs.half().to(device)
-        log(log_fp, f"[embed] GPU 전송 완료. dtype=float16  GPU 메모리: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+            # GPU에 상주 (cosine 검색 시 미리 정규화, float16으로 메모리 절약 ~4GB)
+            log(log_fp, f"[embed] GPU 전송 중... ({corpus_embs.shape[0]:,} × {corpus_embs.shape[1]})")
+            if use_cosine:
+                corpus_embs = F.normalize(corpus_embs.float(), dim=-1)
+            corpus_embs_gpu = corpus_embs.half().to(device)
+            log(log_fp, f"[embed] GPU 전송 완료. dtype=float16  GPU 메모리: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
         # ── qrels 로딩 (golden 판별용) ────────────────────────────────────────
         qrels = {}
@@ -496,6 +616,7 @@ def main():
         total_poison_survived = 0
         total_retrieved_docs  = 0
         total_golden_in_topk  = 0
+        total_survivors       = 0
 
         pbar = tqdm(enumerate(rows_data), total=len(rows_data),
                     desc="Queries", unit="q", dynamic_ncols=True)
@@ -507,19 +628,37 @@ def main():
             poison_docs = entry["poison_docs"][:args.adv_per_query]
             golden_idx  = entry["golden_idx"]
 
-            # ① Full-corpus retrieval (adv docs를 corpus에 inject)
-            retrieved_docs, adv_positions, poison_in_topk = retrieve_fullcorpus_topk(
-                query=question,
-                adv_docs=poison_docs,
-                corpus_embs_gpu=corpus_embs_gpu,
-                corpus_texts=corpus_texts,
-                encode_fn=encode_fn,
-                use_cosine=use_cosine,
-                device=device,
-                top_k=args.top_k,
-                q_prefix=q_prefix,
-                d_prefix=d_prefix,
-            )
+            # ① Full-corpus retrieval (직접 scoring) 또는 clean top-N cache + adv 재랭킹
+            if clean_topn_cache is not None:
+                retrieved_docs, adv_positions, poison_in_topk = retrieve_cached_topn_topk(
+                    query=question,
+                    adv_docs=poison_docs,
+                    clean_topn_cache=clean_topn_cache,
+                    corpus_texts=corpus_texts,
+                    encode_fn=encode_fn,
+                    use_cosine=use_cosine,
+                    device=device,
+                    top_k=args.top_k,
+                    q_prefix=q_prefix,
+                    d_prefix=d_prefix,
+                    query_encode_fn=query_encode_fn,
+                    doc_encode_fn=doc_encode_fn,
+                )
+            else:
+                retrieved_docs, adv_positions, poison_in_topk = retrieve_fullcorpus_topk(
+                    query=question,
+                    adv_docs=poison_docs,
+                    corpus_embs_gpu=corpus_embs_gpu,
+                    corpus_texts=corpus_texts,
+                    encode_fn=encode_fn,
+                    use_cosine=use_cosine,
+                    device=device,
+                    top_k=args.top_k,
+                    q_prefix=q_prefix,
+                    d_prefix=d_prefix,
+                    query_encode_fn=query_encode_fn,
+                    doc_encode_fn=doc_encode_fn,
+                )
 
             has_poison = poison_in_topk > 0
             total_retrieved_docs  += len(retrieved_docs)
@@ -569,6 +708,7 @@ def main():
             poison_survived       = any(d["is_adv"] for d in survivors)
             poison_survived_count = sum(1 for d in survivors if d["is_adv"])
             total_poison_survived += poison_survived_count
+            total_survivors       += len(survivors)
 
             # ④ RAGDefender generation
             safe_docs   = [clean_str(retrieved_docs[d["index"]]) for d in survivors]
@@ -607,6 +747,8 @@ def main():
         nd_pr = total_poison_in_topk / total_retrieved_docs  if total_retrieved_docs  else 0.0
         nd_f1 = 2*nd_pr*nd_rc/(nd_pr+nd_rc) if (nd_pr+nd_rc) else 0.0
         rd_rc = total_poison_survived / total_poison_injected if total_poison_injected else 0.0
+        rd_pr = total_poison_survived / total_survivors if total_survivors else 0.0
+        rd_f1 = 2*rd_pr*rd_rc/(rd_pr+rd_rc) if (rd_pr+rd_rc) else 0.0
 
         final_json = {
             "dataset": args.dataset,
@@ -622,10 +764,12 @@ def main():
                 "poison_f1":        round(nd_f1, 4),
             },
             "ragdefender": {
-                "num_queries":        n,
-                "ASR":                round(rd_asr_cnt / n, 4),
-                "Accuracy":           round(rd_acc_cnt / n, 4),
+                "num_queries":         n,
+                "ASR":                 round(rd_asr_cnt / n, 4),
+                "Accuracy":            round(rd_acc_cnt / n, 4),
                 "poison_recall_after": round(rd_rc, 4),
+                "poison_precision_after": round(rd_pr, 4),
+                "poison_f1_after":     round(rd_f1, 4),
             },
             "delta": {
                 "ASR_sub": f"{(rd_asr_cnt - nd_asr_cnt)/n*100:+.1f}%",
@@ -642,9 +786,12 @@ def main():
         log(log_fp, f"  {'ND-Accuracy':<35} {nd_acc_cnt/n*100:>9.1f}%")
         log(log_fp, f"  {'RD-Accuracy':<35} {rd_acc_cnt/n*100:>9.1f}%")
         log(log_fp, f"  {'Retrieval rate (쿼리 중 adv 포함률)':<35} {nd_rr*100:>9.1f}%")
-        log(log_fp, f"  {'Poison recall (top-k 내 adv 비율)':<35} {nd_rc*100:>9.1f}%")
-        log(log_fp, f"  {'Poison precision':<35} {nd_pr*100:>9.1f}%")
-        log(log_fp, f"  {'Poison F1':<35} {nd_f1*100:>9.1f}%")
+        log(log_fp, f"  {'[ND] Poison recall (top-k 내 adv 비율)':<35} {nd_rc*100:>9.1f}%")
+        log(log_fp, f"  {'[ND] Poison precision':<35} {nd_pr*100:>9.1f}%")
+        log(log_fp, f"  {'[ND] Poison F1':<35} {nd_f1*100:>9.1f}%")
+        log(log_fp, f"  {'[RD] Poison recall (방어 후 생존율)':<35} {rd_rc*100:>9.1f}%")
+        log(log_fp, f"  {'[RD] Poison precision':<35} {rd_pr*100:>9.1f}%")
+        log(log_fp, f"  {'[RD] Poison F1':<35} {rd_f1*100:>9.1f}%")
         log(log_fp, f"{'='*60}")
         log_json(log_fp, "FINAL_RESULTS", final_json)
 
