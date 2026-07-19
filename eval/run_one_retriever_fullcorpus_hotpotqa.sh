@@ -67,8 +67,8 @@ result = {"retriever": "$RET",
           "rd_asr": rd["ASR"], "rd_precision": rd["poison_precision_after"],
           "rd_recall": rd["poison_recall_after"], "rd_f1": rd["poison_f1_after"]}
 json.dump(result, open("$OUT", "w"), indent=2)
-print(f"  ND: ASR={result['nd_asr']*100:.1f}%  P={result['nd_precision']*100:.1f}%  R={result['nd_recall']*100:.1f}%  F1={result['nd_f1']*100:.1f}%")
-print(f"  RD: ASR={result['rd_asr']*100:.1f}%  P={result['rd_precision']*100:.1f}%  R={result['rd_recall']*100:.1f}%  F1={result['rd_f1']*100:.1f}%")
+print(f"  ND: ASR={result['nd_asr']*100:.4f}%  P={result['nd_precision']*100:.1f}%  R={result['nd_recall']*100:.1f}%  F1={result['nd_f1']*100:.1f}%")
+print(f"  RD: ASR={result['rd_asr']*100:.4f}%  P={result['rd_precision']*100:.1f}%  R={result['rd_recall']*100:.1f}%  F1={result['rd_f1']*100:.1f}%")
 PYEOF
 
 echo "$(ts) ===== HotpotQA $RET 완료 (결과: $OUT) ====="

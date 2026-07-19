@@ -84,8 +84,8 @@ def m(d, key):
 result = {"retriever": "$RET", "seed": m(js, "seed"), "noseed": m(jns, "noseed")}
 json.dump(result, open("$OUT", "w"), indent=2)
 for label, d in (("seed", result["seed"]), ("noseed", result["noseed"])):
-    print(f"  {label:6s}-> ND: ASR={d['nd_asr']*100:.1f}% P={d['nd_precision']*100:.1f}% R={d['nd_recall']*100:.1f}% F1={d['nd_f1']*100:.1f}%"
-          f"  |  RD: ASR={d['rd_asr']*100:.1f}% P={d['rd_precision']*100:.1f}% R={d['rd_recall']*100:.1f}% F1={d['rd_f1']*100:.1f}%")
+    print(f"  {label:6s}-> ND: ASR={d['nd_asr']*100:.4f}% P={d['nd_precision']*100:.1f}% R={d['nd_recall']*100:.1f}% F1={d['nd_f1']*100:.1f}%"
+          f"  |  RD: ASR={d['rd_asr']*100:.4f}% P={d['rd_precision']*100:.1f}% R={d['rd_recall']*100:.1f}% F1={d['rd_f1']*100:.1f}%")
 PYEOF
 
 echo "$(ts) ===== $RET 완료 (결과: $OUT) ====="

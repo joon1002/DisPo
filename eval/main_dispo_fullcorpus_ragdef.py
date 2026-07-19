@@ -772,7 +772,7 @@ def main():
                 "poison_f1_after":     round(rd_f1, 4),
             },
             "delta": {
-                "ASR_sub": f"{(rd_asr_cnt - nd_asr_cnt)/n*100:+.1f}%",
+                "ASR_sub": f"{(rd_asr_cnt - nd_asr_cnt)/n*100:+.4f}%",
             },
         }
 
@@ -781,8 +781,8 @@ def main():
         log(log_fp, f"  corpus size: {n_corpus:,}")
         log(log_fp, f"  {'지표':<35} {'값':>10}")
         log(log_fp, f"  {'-'*45}")
-        log(log_fp, f"  {'ND-ASR':<35} {nd_asr_cnt/n*100:>9.1f}%")
-        log(log_fp, f"  {'RD-ASR':<35} {rd_asr_cnt/n*100:>9.1f}%")
+        log(log_fp, f"  {'ND-ASR':<35} {nd_asr_cnt/n*100:>9.4f}%")
+        log(log_fp, f"  {'RD-ASR':<35} {rd_asr_cnt/n*100:>9.4f}%")
         log(log_fp, f"  {'ND-Accuracy':<35} {nd_acc_cnt/n*100:>9.1f}%")
         log(log_fp, f"  {'RD-Accuracy':<35} {rd_acc_cnt/n*100:>9.1f}%")
         log(log_fp, f"  {'Retrieval rate (쿼리 중 adv 포함률)':<35} {nd_rr*100:>9.1f}%")
