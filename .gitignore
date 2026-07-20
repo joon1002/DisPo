@@ -10,3 +10,5 @@ __pycache__/
 *.pt
 *.bin
 *.safetensors
+eval/model_configs/gpt4o_mini_config.json
+!eval/clean_topn_cache/**/*.pt
