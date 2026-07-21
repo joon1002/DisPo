@@ -18,7 +18,6 @@ import pandas as pd
 import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from tqdm import tqdm
 
 import train_grpo_poison_v7_e5 as v7e5
 

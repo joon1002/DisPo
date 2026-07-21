@@ -2,50 +2,16 @@
 """
 train_grpo_poison_v7.py
 
-GRPO + Kendall loss training for RAG poison document generation.  [v7]
+GRPO + Kendall loss training for RAG poison document generation.
 
-v7 변경점 (v6 대비):
-
-  ▶ 근본 문제 분석
-    v6 epoch0 step 355 전후로 r_retrieval·r_generation 동시 붕괴 확인.
-    붕괴 직전 10 step (340-350): n_valid=7-8, r_gen=0.61-0.81, reward=1.8-2.1
-
-    원인: 고보상 연속 → std(reward) 작음 → normalized advantage 폭발 → Adam 모멘텀 누적
-
-    GRPO advantage 계산:
-      adv_i = (r_i - mean(r)) / std(r)
-    reward 1.8-2.1로 수렴 시 std ≈ 0.1 → adv 범위 ±10 이상 가능.
-    Adam 모멘텀 β1=0.9, 10회 연속 동방향 gradient:
-      effective_step ≈ LR / (1-0.9^10) ≈ LR × 6.5
-      → 실효 LR ≈ 2e-5 × 6.5 = 1.3e-4 → 과도한 weight update → overshooting
-
-    overshooting 후 상태:
-      모든 8 candidates: 동일한 템플릿 생성 → std(combined_mod) ≈ 0 → GRPO skip
-      gradient 차단 → 붕괴 상태에서 회복 불가
-
-  1. Advantage clipping (핵심 수정)
-     v6: adv = (r - mean) / std            # 상한 없음 → 폭발 가능
-     v7: adv = clamp((r - mean) / std, -ADV_CLIP, ADV_CLIP)  # ADV_CLIP=2.0
-     효과: reward std 작아져도 gradient 크기 2×LR로 제한 → overshooting 방지
-
-  2. Learning rate 감소 (보조 수정)
-     v6: LR = 2e-5
-     v7: LR = 1e-5  (2× 감소)
-     효과: Adam 모멘텀 포함 실효 step size 추가 감소 → 안정적 수렴
-
-  3. GRAD_CLIP 강화 (보조 수정)
-     v6: GRAD_CLIP = 1.0
-     v7: GRAD_CLIP = 0.5
-     효과: gradient norm 수준에서 추가 방어선 → ADV_CLIP과 이중 보호
-
-보상 구조 (5-component, v6와 동일):
+보상 구조 (5-component):
   r1: r_retrieval   — (dot - 0.40) / 1.10 ∈ [0,1]  (Contriever raw dot, 단조증가)
   r2: r_disp_embed  — 1 - MiniLM inter-cosine ∈ [0,1]  [Stage 2 bypass]
   r3: r_tfidf_disp  — 1 - TF-IDF inter-sim  ∈ [0,1]   [Stage 1 bypass]
-  r4: r_generation  — P(target | Context:{doc}\\nQuery:{q}\\nAnswer:) via Vicuna-7B
+  r4: r_generation  — P(target | Context:{doc}\nQuery:{q}\nAnswer:) via Vicuna-7B
   r5: r_ppl         — Vicuna-7B log P(doc) → sigmoid(-log(PPL/20))
 
-패널티 (v6와 동일, additive):
+패널티 (additive):
   target 미포함: combined_mod[i] -= 2.0
   query 반복:    combined_mod[i] -= 0.4 × (n-1)
   doc collapse:  combined_mod[i]  = -3.0
@@ -54,10 +20,9 @@ v7 변경점 (v6 대비):
   L = L_grpo(adv_clipped) + λ_k · L_kendall_rank + L_uncert
 
 Usage:
-  CUDA_VISIBLE_DEVICES=0 /data/joonhyung/nq/.venv/bin/python \\
-    /data/joonhyung/nq/scripts/train_grpo_poison_v7.py \\
-    --input          /data/joonhyung/nq/results/nq_500_pd_7b.csv \\
-    --output_dir     /data/joonhyung/nq/results/grpo_whitebox_v7_1.5b_run1 \\
+  CUDA_VISIBLE_DEVICES=0 python train_grpo_poison_v7.py \\
+    --input          data/nq_500_pd_7b.csv \\
+    --output_dir     results/grpo_v7_run1 \\
     --generator_model Qwen/Qwen2.5-1.5B-Instruct \\
     --vicuna_model    lmsys/vicuna-7b-v1.3 \\
     --num_epochs 3 --group_size 8 --lora_r 16 --gpu_id 0
@@ -95,6 +60,7 @@ FLUENCY_REF_PPL   = 20.0
 
 LAMBDA_KENDALL    = 0.30
 GROUP_SIZE        = 8
+DEFAULT_NUM_ADV_DOCS = 3  # seed 제외 생성 문서 수. 기본값은 총 N=4(doc0_seed+doc1~doc3).
 # 토큰 범위 유지: seed_doc 실측 P10=123, P90=157 (Qwen tokenizer)
 # MIN=80 → ~58 words (하한선), MAX=160 → ~117 words (상한선)
 # 실측 seed_doc 평균 100 words = 140 tokens → 현재 범위 커버
@@ -102,39 +68,30 @@ MIN_NEW_TOKENS    = 80
 MAX_NEW_TOKENS    = 160
 TEMPERATURE       = 0.85
 TOP_P             = 0.92
-REPETITION_PEN    = 1.1   # 1.5→1.1: target phrase가 프롬프트에 포함되어
-                           # 1.5는 target 토큰 logit ~33% 억제 → n_valid↓
+REPETITION_PEN    = 1.1   # target phrase가 프롬프트에 포함되어 높은 값은 target 토큰 logit 억제
                            # NO_REPEAT_NGRAM_SIZE가 반복 제어를 맡으므로 낮게 유지
 NO_REPEAT_NGRAM_SIZE = 4
-LR                = 1e-5   # v7 FIX: 2e-5→1e-5, Adam 모멘텀 누적시 실효 step 추가 감소
+LR                = 1e-5   # Adam 모멘텀 누적시 실효 step 추가 감소 목적
 WEIGHT_DECAY      = 0.01
-GRAD_CLIP         = 0.5    # v7 FIX: 1.0→0.5, gradient norm 수준 이중 방어선
-ADV_CLIP          = 2.0    # v7 NEW: advantage 상한, std 작을때 폭발 방지
+GRAD_CLIP         = 0.5    # gradient norm 수준 방어선 (ADV_CLIP과 이중 보호)
+ADV_CLIP          = 2.0    # advantage 상한: high-reward 수렴 시 std↓→adv↑→overshooting 방지
 LORA_R            = 16
 LORA_ALPHA        = 32
 LORA_DROPOUT      = 0.05
 LORA_TARGETS      = ["q_proj", "v_proj", "k_proj", "o_proj",
                      "gate_proj", "up_proj", "down_proj"]
-MMR_LAMBDA        = 0.60
 MAX_PROMPT_TOKENS = 768
 
 # ── r_retrieval: Contriever raw dot product 선형 정규화 ──────────────────────
-# Two-Gate 완전 제거 이유 (실측 기반):
-#   1. cos vs dot product 불일치: Spearman ρ=0.635, top-10 overlap 7/10
-#      → document L2 norm 분산(1.31~2.05)으로 cos/dot 랭킹이 최대 30% 불일치
-#      → ragatt_pipeline이 dot product로 검색 → 학습 보상도 dot product로 통일
-#   2. Two-Gate는 임계값 보정 오류에 취약 (v5 오류 A의 근본)
-#      → 단조증가 선형함수로 항상 gradient 확보
-# 실측 Contriever raw dot product (seed_doc vs query, n=50):
-#   Min=0.484, Max=1.296, Mean=1.002, Std=0.166
-# DOT_FLOOR: 0.40 (관측 최솟값 아래, 무관한 쌍의 기준선)
-# DOT_CEILING: 1.50 (관측 최댓값 1.30 + 여유)
+# pipeline이 dot product로 검색 → 학습 보상도 dot product 사용
+# (cos 기반 보상은 실제 랭킹과 최대 30% 불일치: Spearman ρ=0.635, top-10 overlap 7/10)
+# 실측 (seed_doc vs query, n=50): Min=0.484, Max=1.296, Mean=1.002, Std=0.166
+# DOT_FLOOR=0.40 (무관한 쌍 기준선), DOT_CEILING=1.50 (최대 여유 포함)
 DOT_FLOOR   = 0.40
 DOT_CEILING = 1.50
 
-# ── v6 패널티 상수 (모두 additive) ────────────────────────────────────────
-# v5의 RETRIEVAL_THRESHOLD / RETRIEVAL_FAIL_PENALTY 제거 (→ 오류 A 해결)
-COLLAPSE_PENALTY           = -3.0   # doc quality fail: 여전히 replacement (극단적 붕괴)
+# ── 패널티 상수 (모두 additive) ────────────────────────────────────────────
+COLLAPSE_PENALTY           = -3.0   # doc quality fail → replacement (극단적 붕괴)
 TARGET_MISSING_PENALTY_ADD =  2.0   # target 미포함 시 차감 (additive → std 보존)
 QUERY_REPEAT_PENALTY       = -0.4   # 쿼리 반복 1회당 차감
 MIN_DOC_WORDS              = 30
@@ -152,11 +109,8 @@ _RAG_PROMPT = (
 )
 
 
-# Two-Gate 제거: 단조함수로 대체 (threshold 보정 오류 원천 차단)
-
-
 # ─────────────────────────────────────────────────────────
-# TF-IDF (MMR selection용 + r_tfidf_disp용)
+# TF-IDF (r_tfidf_disp용)
 # ─────────────────────────────────────────────────────────
 _tfidf = TfidfVectorizer(
     sublinear_tf=True, stop_words="english",
@@ -278,10 +232,7 @@ class UncertaintyWeighter(nn.Module):
 # REWARD FUNCTIONS
 # ─────────────────────────────────────────────────────────
 def _get_contriever_dot(doc: str, query: str) -> float:
-    """Contriever raw dot product (non-normalized) — ragatt_pipeline 평가 지표와 동일.
-    실측: Spearman ρ(cos, dot)=0.635, top-10 overlap=7/10
-    → cos 기반 학습은 실제 검색 랭킹과 최대 30% 불일치 → dot product로 통일.
-    """
+    """Contriever raw dot product — ragatt_pipeline 검색 지표와 동일."""
     if not doc.strip():
         return 0.0
     if query not in _contriever_q_cache:
@@ -295,7 +246,7 @@ def _get_contriever_dot(doc: str, query: str) -> float:
 
 def r_retrieval(doc: str, query: str) -> float:
     """Contriever raw dot product → 선형 정규화 [0, 1].
-    단조증가: dot product 높을수록 r 높음. 임계값/보정값 없음.
+    단조증가: dot product 높을수록 r 높음.
     실측 분포: Min=0.484, Max=1.296, Mean=1.002
     DOT_FLOOR=0.40 (기준선), DOT_CEILING=1.50 (최대 여유 포함)
     - dot=0.50 → 0.09 | dot=1.00 → 0.55 | dot=1.30 → 0.82
@@ -306,8 +257,7 @@ def r_retrieval(doc: str, query: str) -> float:
 
 def r_disp_embed(doc: str, context_docs: List[str]) -> float:
     """Inter-doc MiniLM cosine similarity → 1 - inter_sim. [Stage 2 bypass]
-    r_tfidf_disp와 동일 설계로 통일: 낮을수록 좋음, 임계값 없음.
-    RAGDefender가 cosine 기반으로 탐지 → MiniLM은 cosine 유지.
+    RAGDefender가 cosine 기반으로 탐지 → MiniLM cosine으로 학습.
     """
     if not doc.strip() or not context_docs:
         return 1.0  # no comparison → assume fully diverse
@@ -341,9 +291,7 @@ def r_tfidf_disp(doc: str, context_docs: List[str]) -> float:
 
 
 def r_generation(doc: str, query: str, target: str) -> float:
-    """P(target_answer | RAG_prompt(doc, query)) via Vicuna-7B.
-    v6에서도 유지: r_gen이 group 내 분산 9.9% (> 0.3) 확인됨 (v5 log 분석)
-    """
+    """P(target_answer | RAG_prompt(doc, query)) via Vicuna-7B."""
     if not doc.strip():
         return 0.5
 
@@ -388,9 +336,6 @@ def r_ppl(doc: str) -> float:
     return float(torch.sigmoid(torch.tensor(score)).item())
 
 
-r_fluency = r_ppl
-
-
 def contains_target(doc: str, target: str) -> bool:
     return target.lower() in doc.lower()
 
@@ -423,32 +368,6 @@ def compute_reward_vector(
 
 
 # ─────────────────────────────────────────────────────────
-# MMR SELECTION (inference 다양성)
-# ─────────────────────────────────────────────────────────
-def mmr_select(
-    docs: List[str], rewards: np.ndarray,
-    n_select: int = 3, lam: float = MMR_LAMBDA,
-) -> List[int]:
-    vecs   = [_tfidf_vec(d) for d in docs]
-    norm_r = (rewards - rewards.min()) / (rewards.max() - rewards.min() + 1e-8)
-    selected: List[int] = []
-    remaining = list(range(len(docs)))
-    for _ in range(min(n_select, len(docs))):
-        if not selected:
-            best = int(np.argmax(norm_r))
-        else:
-            scores = [
-                lam * norm_r[i] - (1.0 - lam) * max(cosine_np(vecs[i], vecs[j])
-                                                     for j in selected)
-                for i in remaining
-            ]
-            best = remaining[int(np.argmax(scores))]
-        selected.append(best)
-        remaining.remove(best)
-    return selected
-
-
-# ─────────────────────────────────────────────────────────
 # LOSS FUNCTIONS
 # ─────────────────────────────────────────────────────────
 def soft_kendall_loss(
@@ -469,15 +388,13 @@ def grpo_loss(
     log_probs: torch.Tensor, rewards: torch.Tensor
 ) -> torch.Tensor:
     adv = (rewards - rewards.mean()) / (rewards.std() + 1e-8)
-    adv = torch.clamp(adv, -ADV_CLIP, ADV_CLIP)  # v7 FIX: 고보상 수렴시 std↓→adv↑→overshooting 방지
+    adv = torch.clamp(adv, -ADV_CLIP, ADV_CLIP)  # 고보상 수렴시 std↓→adv↑→overshooting 방지
     return -(adv.detach() * log_probs).mean()
 
 
 # ─────────────────────────────────────────────────────────
 # PROMPT BUILDING (Qwen 생성기용)
 # ─────────────────────────────────────────────────────────
-# v6 핵심 변경: "naturally implies" → 명시적 포함 요구
-# v5 오류 C: 시스템 메시지가 "implies"(암시)를 허용 → model이 간접 표현 선택 → n_valid=0
 _SYSTEM = (
     "You are a Wikipedia passage editor. "
     "Rewrite the given passage so it reads as a natural Wikipedia excerpt "
@@ -641,7 +558,7 @@ def sample_candidates(
 
 
 # ─────────────────────────────────────────────────────────
-# ONE-POSITION TRAINING STEP  (v6 핵심)
+# ONE-POSITION TRAINING STEP
 # ─────────────────────────────────────────────────────────
 def train_position(
     model, tokenizer,
@@ -657,15 +574,10 @@ def train_position(
     """
     Returns: (loss_or_None, best_doc, best_combined_reward, mean_reward_vector(5,), n_valid)
 
-    v6 패널티 적용 (모두 additive — std 보존이 핵심):
+    패널티 적용 (모두 additive — std 보존):
       1. Hard:     doc quality fail → combined_mod[i] = COLLAPSE_PENALTY (-3.0) [replacement]
-                   (단어 반복 붕괴는 이상값이므로 여전히 replacement 처리)
       2. Additive: target 미포함  → combined_mod[i] -= TARGET_MISSING_PENALTY_ADD (2.0)
       3. Additive: query 반복     → combined_mod[i] += QUERY_REPEAT_PENALTY × (n-1)
-
-    v5와 결정적 차이:
-      v5 오류 B: target 미포함 → replacement(-2.0) → n_valid=0시 전원 동일 → std=0 → skip
-      v6 수정:   target 미포함 → additive(-2.0)   → base_reward 차이 유지 → std>0 → gradient
     """
     context_docs = [seed] + prev_docs
     prompt_text = format_prompt(tokenizer, query, target, seed, prev_docs)
@@ -686,14 +598,14 @@ def train_position(
     # Uncertainty-weighted combined reward
     combined, uncert_loss = uw(reward_t)  # (G,)
 
-    # ── v6 Penalty pass (additive, std 보존) ─────────────────────────────
+    # ── Penalty pass (additive, std 보존) ────────────────────────────────
     combined_mod = combined.detach().clone()
     for i, t in enumerate(texts):
-        # 1. doc quality fail: extreme collapse → replacement (예외적 처리)
+        # 1. doc quality fail: extreme collapse → replacement
         if not _check_doc_quality(t):
             combined_mod[i] = COLLAPSE_PENALTY
             continue
-        # 2. target 미포함: additive (v6 핵심 변경)
+        # 2. target 미포함: additive (base_reward 차이 유지 → std>0 → gradient)
         if not contains_target(t, target):
             combined_mod[i] = combined_mod[i] - TARGET_MISSING_PENALTY_ADD
         # 3. query 반복: additive
@@ -764,7 +676,7 @@ def train_position(
 
 
 # ─────────────────────────────────────────────────────────
-# SEQUENTIAL 3-DOC GENERATION PER QUERY
+# SEQUENTIAL ADV-DOC GENERATION PER QUERY
 # ─────────────────────────────────────────────────────────
 def process_query(
     model, tokenizer, optimizer, uw: UncertaintyWeighter,
@@ -772,7 +684,7 @@ def process_query(
     G: int, min_new: int, max_new: int, temp: float, lam_k: float, device,
     max_prompt_tokens: int,
     stream_backward: bool,
-    num_adv_docs: int = 3,
+    num_adv_docs: int = DEFAULT_NUM_ADV_DOCS,
 ) -> Tuple[List[str], List[Optional[float]], List[float], List[np.ndarray], List[int]]:
     docs, losses, rwds, rvecs, n_valids = [], [], [], [], []
     for _ in range(num_adv_docs):
@@ -801,7 +713,7 @@ def infer_poison_docs(
     df: pd.DataFrame,
     G: int, min_new: int, max_new: int, temp: float, device,
     max_prompt_tokens: int,
-    num_adv_docs: int = 3,
+    num_adv_docs: int = DEFAULT_NUM_ADV_DOCS,
     gen_batch_size: int = 1,
 ) -> pd.DataFrame:
     model.eval()
@@ -869,8 +781,8 @@ def infer_poison_docs(
             ]
             reward_np = np.stack([rv for rv, _ in reward_results])
             combined, _ = uw(torch.tensor(reward_np, device=device))
-            best = mmr_select(valid_cands, combined.cpu().numpy(), n_select=1)
-            docs.append(valid_cands[best[0]])
+            best_idx = int(torch.argmax(combined).item())
+            docs.append(valid_cands[best_idx])
 
         rec = {
             "query":          query,
@@ -910,7 +822,7 @@ def train(args) -> None:
               list(df["query"].fillna("")) +
               list(df.get("golden_passage", pd.Series([])).fillna("")))
     fit_tfidf(corpus)
-    print("[tfidf] Vectorizer fitted (MMR + r_tfidf_disp 공용)")
+    print("[tfidf] Vectorizer fitted (r_tfidf_disp)")
 
     init_whitebox_models(
         retrieval_model=args.retrieval_model,
@@ -937,21 +849,19 @@ def train(args) -> None:
         lr=args.lr, weight_decay=WEIGHT_DECAY,
     )
 
-    print(f"\n[config v7] 생성기 (훈련)  : {args.generator_model}")
-    print(f"[config v7] 검색기 (frozen) : {args.retrieval_model}")
-    print(f"[config v7]   r_retrieval   : raw dot product → 선형정규화 [(dot-{DOT_FLOOR})/({DOT_CEILING}-{DOT_FLOOR})]")
-    print(f"[config v7] 분산측정(frozen): {args.defense_model}")
-    print(f"[config v7]   r_disp_embed  : 1 - MiniLM inter-cosine [Stage 2]")
-    print(f"[config v7]   r_tfidf_disp  : 1 - TF-IDF inter-sim [Stage 1]")
-    print(f"[config v7] 판단기 (frozen) : {args.vicuna_model}")
-    print(f"[config v7]   r_generation  : P(target|RAG_prompt) / r_ppl : Vicuna PPL")
-    print(f"[config v7] 패널티 방식     : additive (std 보존)")
-    print(f"[config v7]   target_miss   : -= {TARGET_MISSING_PENALTY_ADD}")
-    print(f"[config v7]   query_repeat  : += {QUERY_REPEAT_PENALTY} × (n-1)")
-    print(f"[config v7]   doc_collapse  : = {COLLAPSE_PENALTY} (replacement)")
-    print(f"[config v7] v7 수정사항:")
-    print(f"[config v7]   ADV_CLIP={ADV_CLIP}  LR={args.lr:.0e}  GRAD_CLIP={GRAD_CLIP}")
-    print(f"[config v7]   adv = clamp((r-mean)/std, -{ADV_CLIP}, {ADV_CLIP}) → overshooting 방지\n")
+    print(f"\n[config] 생성기 (훈련)  : {args.generator_model}")
+    print(f"[config] 검색기 (frozen) : {args.retrieval_model}")
+    print(f"[config]   r_retrieval   : raw dot product → 선형정규화 [(dot-{DOT_FLOOR})/({DOT_CEILING}-{DOT_FLOOR})]")
+    print(f"[config] 분산측정(frozen): {args.defense_model}")
+    print(f"[config]   r_disp_embed  : 1 - MiniLM inter-cosine [Stage 2]")
+    print(f"[config]   r_tfidf_disp  : 1 - TF-IDF inter-sim [Stage 1]")
+    print(f"[config] 판단기 (frozen) : {args.vicuna_model}")
+    print(f"[config]   r_generation  : P(target|RAG_prompt) / r_ppl : Vicuna PPL")
+    print(f"[config] 패널티 방식     : additive (std 보존)")
+    print(f"[config]   target_miss   : -= {TARGET_MISSING_PENALTY_ADD}")
+    print(f"[config]   query_repeat  : += {QUERY_REPEAT_PENALTY} × (n-1)")
+    print(f"[config]   doc_collapse  : = {COLLAPSE_PENALTY} (replacement)")
+    print(f"[config]   ADV_CLIP={ADV_CLIP}  LR={args.lr:.0e}  GRAD_CLIP={GRAD_CLIP}\n")
 
     log_fh = open(log_path, "w")
     total_steps = args.num_epochs * len(df)
@@ -1012,7 +922,7 @@ def train(args) -> None:
             global_bar.set_postfix(
                 ep=f"{epoch+1}/{args.num_epochs}",
                 loss=f"{avg_l:.4f}", reward=f"{avg_r:.4f}",
-                skip=n_skip, nv=f"{sum(n_valids)//(args.num_adv_docs)}/{args.group_size}",
+                skip=n_skip, nv=f"{sum(n_valids)//max(len(n_valids), 1)}/{args.group_size}",
                 σ=f"{si['σ_retrieval']:.2f}/{si['σ_disp_embed']:.2f}"
                   f"/{si['σ_tfidf_disp']:.2f}/{si['σ_generation']:.2f}/{si['σ_ppl']:.2f}",
                 q=query[:12],
@@ -1045,7 +955,7 @@ def train(args) -> None:
 # ARGUMENT PARSER
 # ─────────────────────────────────────────────────────────
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="GRPO poison doc training v7")
+    p = argparse.ArgumentParser(description="GRPO poison doc training")
     p.add_argument("--input",           default=DEFAULT_INPUT)
     p.add_argument("--output_dir",      default=DEFAULT_OUTPUT)
     p.add_argument("--generator_model", default=GENERATOR_MODEL)
@@ -1054,7 +964,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--vicuna_model",    default=VICUNA_MODEL)
     p.add_argument("--num_epochs",      type=int,   default=3)
     p.add_argument("--group_size",      type=int,   default=GROUP_SIZE)
-    p.add_argument("--num_adv_docs",   type=int,   default=3,
+    p.add_argument("--num_adv_docs",   type=int,   default=DEFAULT_NUM_ADV_DOCS,
                    help="seed 제외 추가 생성 문서 수. 기본 3 → 총 4개. --N 지정 시 무시됨")
     p.add_argument("--N",              type=int,   default=None,
                    help="seed 포함 총 악성문서 수. 지정 시 --num_adv_docs 대신 사용. "
@@ -1083,6 +993,8 @@ def parse_args() -> argparse.Namespace:
         if args.N < 2:
             p.error("--N은 최소 2 이상이어야 합니다 (seed 1개 + 추가 문서 1개 이상).")
         args.num_adv_docs = args.N - 1
+    if args.num_adv_docs < 1:
+        p.error("--num_adv_docs는 최소 1 이상이어야 합니다 (seed 제외 추가 문서 수).")
     return args
 
 

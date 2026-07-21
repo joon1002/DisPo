@@ -105,6 +105,7 @@ FLUENCY_REF_PPL   = 20.0
 
 LAMBDA_KENDALL    = 0.30
 GROUP_SIZE        = 8
+DEFAULT_NUM_ADV_DOCS = 3  # seed 제외 생성 문서 수. 기본값은 총 N=4(doc0_seed+doc1~doc3).
 # 토큰 범위 유지: seed_doc 실측 P10=123, P90=157 (Qwen tokenizer)
 # MIN=80 → ~58 words (하한선), MAX=160 → ~117 words (상한선)
 # 실측 seed_doc 평균 100 words = 140 tokens → 현재 범위 커버
@@ -125,7 +126,6 @@ LORA_ALPHA        = 32
 LORA_DROPOUT      = 0.05
 LORA_TARGETS      = ["q_proj", "v_proj", "k_proj", "o_proj",
                      "gate_proj", "up_proj", "down_proj"]
-MMR_LAMBDA        = 0.60
 MAX_PROMPT_TOKENS = 768
 
 # ── r_retrieval: E5-base-v2 cosine similarity 선형 정규화 ───────────────────
@@ -163,7 +163,7 @@ _RAG_PROMPT = (
 
 
 # ─────────────────────────────────────────────────────────
-# TF-IDF (MMR selection용 + r_tfidf_disp용)
+# TF-IDF (r_tfidf_disp용)
 # ─────────────────────────────────────────────────────────
 _tfidf = TfidfVectorizer(
     sublinear_tf=True, stop_words="english",
@@ -427,32 +427,6 @@ def compute_reward_vector(
         r_generation(doc, query, target),                                            # r_generation
         r_ppl(doc),                                                                  # r_ppl
     ], dtype=np.float32), cos
-
-
-# ─────────────────────────────────────────────────────────
-# MMR SELECTION (inference 다양성)
-# ─────────────────────────────────────────────────────────
-def mmr_select(
-    docs: List[str], rewards: np.ndarray,
-    n_select: int = 3, lam: float = MMR_LAMBDA,
-) -> List[int]:
-    vecs   = [_tfidf_vec(d) for d in docs]
-    norm_r = (rewards - rewards.min()) / (rewards.max() - rewards.min() + 1e-8)
-    selected: List[int] = []
-    remaining = list(range(len(docs)))
-    for _ in range(min(n_select, len(docs))):
-        if not selected:
-            best = int(np.argmax(norm_r))
-        else:
-            scores = [
-                lam * norm_r[i] - (1.0 - lam) * max(cosine_np(vecs[i], vecs[j])
-                                                     for j in selected)
-                for i in remaining
-            ]
-            best = remaining[int(np.argmax(scores))]
-        selected.append(best)
-        remaining.remove(best)
-    return selected
 
 
 # ─────────────────────────────────────────────────────────
@@ -771,7 +745,7 @@ def train_position(
 
 
 # ─────────────────────────────────────────────────────────
-# SEQUENTIAL 3-DOC GENERATION PER QUERY
+# SEQUENTIAL ADV-DOC GENERATION PER QUERY
 # ─────────────────────────────────────────────────────────
 def process_query(
     model, tokenizer, optimizer, uw: UncertaintyWeighter,
@@ -779,7 +753,7 @@ def process_query(
     G: int, min_new: int, max_new: int, temp: float, lam_k: float, device,
     max_prompt_tokens: int,
     stream_backward: bool,
-    num_adv_docs: int = 3,
+    num_adv_docs: int = DEFAULT_NUM_ADV_DOCS,
 ) -> Tuple[List[str], List[Optional[float]], List[float], List[np.ndarray], List[int]]:
     docs, losses, rwds, rvecs, n_valids = [], [], [], [], []
     for _ in range(num_adv_docs):
@@ -808,7 +782,7 @@ def infer_poison_docs(
     df: pd.DataFrame,
     G: int, min_new: int, max_new: int, temp: float, device,
     max_prompt_tokens: int,
-    num_adv_docs: int = 3,
+    num_adv_docs: int = DEFAULT_NUM_ADV_DOCS,
 ) -> pd.DataFrame:
     model.eval()
     records = []
@@ -870,8 +844,8 @@ def infer_poison_docs(
             ]
             reward_np = np.stack([rv for rv, _ in reward_results])
             combined, _ = uw(torch.tensor(reward_np, device=device))
-            best = mmr_select(valid_cands, combined.cpu().numpy(), n_select=1)
-            docs.append(valid_cands[best[0]])
+            best_idx = int(torch.argmax(combined).item())
+            docs.append(valid_cands[best_idx])
 
         rec = {
             "query":          query,
@@ -912,7 +886,7 @@ def train(args) -> None:
               list(df["query"].fillna("")) +
               list(df.get("golden_passage", pd.Series([])).fillna("")))
     fit_tfidf(corpus)
-    print("[tfidf] Vectorizer fitted (MMR + r_tfidf_disp 공용)")
+    print("[tfidf] Vectorizer fitted (r_tfidf_disp)")
 
     init_whitebox_models(
         retrieval_model=args.retrieval_model,
@@ -1014,7 +988,7 @@ def train(args) -> None:
             global_bar.set_postfix(
                 ep=f"{epoch+1}/{args.num_epochs}",
                 loss=f"{avg_l:.4f}", reward=f"{avg_r:.4f}",
-                skip=n_skip, nv=f"{sum(n_valids)//(args.num_adv_docs)}/{args.group_size}",
+                skip=n_skip, nv=f"{sum(n_valids)//max(len(n_valids), 1)}/{args.group_size}",
                 σ=f"{si['σ_retrieval']:.2f}/{si['σ_disp_embed']:.2f}"
                   f"/{si['σ_tfidf_disp']:.2f}/{si['σ_generation']:.2f}/{si['σ_ppl']:.2f}",
                 q=query[:12],
@@ -1053,6 +1027,7 @@ def train(args) -> None:
         min_new=args.min_new_tokens, max_new=args.max_new_tokens,
         temp=args.temperature, device=device,
         max_prompt_tokens=args.max_prompt_tokens,
+        num_adv_docs=args.num_adv_docs,
     )
     out_df.to_csv(out_csv, index=False)
     print(f"[done] Poison docs saved → {out_csv}")
@@ -1071,8 +1046,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--vicuna_model",    default=VICUNA_MODEL)
     p.add_argument("--num_epochs",      type=int,   default=3)
     p.add_argument("--group_size",      type=int,   default=GROUP_SIZE)
-    p.add_argument("--num_adv_docs",   type=int,   default=3,
-                   help="쿼리당 생성할 악성 문서 수 (N). doc0_seed 제외, 기본 3 → 총 4개")
+    p.add_argument("--num_adv_docs",   type=int,   default=DEFAULT_NUM_ADV_DOCS,
+                   help="seed 제외 추가 생성 문서 수. 기본 3 → 총 N=4. --N 지정 시 무시됨")
+    p.add_argument("--N",              type=int,   default=None,
+                   help="seed 포함 총 악성문서 수. 예: --N 4 → doc0_seed+doc1~doc3")
     p.add_argument("--min_new_tokens",  type=int,   default=MIN_NEW_TOKENS)
     p.add_argument("--max_new_tokens",  type=int,   default=MAX_NEW_TOKENS)
     p.add_argument("--temperature",     type=float, default=TEMPERATURE)
@@ -1094,7 +1071,14 @@ def parse_args() -> argparse.Namespace:
                    help="Low-memory mode: per-candidate backward (slower but saves VRAM)")
     p.add_argument("--skip_final_infer", action="store_true",
                    help="학습 완료 후 500쿼리 inference 생략 (별도 스크립트로 100쿼리만 생성)")
-    return p.parse_args()
+    args = p.parse_args()
+    if args.N is not None:
+        if args.N < 2:
+            p.error("--N은 최소 2 이상이어야 합니다 (seed 1개 + 추가 문서 1개 이상).")
+        args.num_adv_docs = args.N - 1
+    if args.num_adv_docs < 1:
+        p.error("--num_adv_docs는 최소 1 이상이어야 합니다 (seed 제외 추가 문서 수).")
+    return args
 
 
 if __name__ == "__main__":

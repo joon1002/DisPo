@@ -18,7 +18,6 @@ import pandas as pd
 import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from tqdm import tqdm
 
 import train_grpo_poison_v7 as v7
 
@@ -63,15 +62,24 @@ def parse_args():
     p.add_argument("--output",     default="results/grpo_v7_run1/pd_eval100_v7.csv")
     p.add_argument("--gpu_id",        type=int, default=0)
     p.add_argument("--group_size",    type=int, default=8)
-    p.add_argument("--num_adv_docs",  type=int, default=3,
-                   help="쿼리당 생성할 악성 문서 수 (N), 기본 3 → doc0_seed+doc1~doc3=4개")
+    p.add_argument("--num_adv_docs",  type=int, default=v7.DEFAULT_NUM_ADV_DOCS,
+                   help="seed 제외 추가 생성 문서 수. 기본 3 → 총 N=4. --N 지정 시 무시됨")
+    p.add_argument("--N",             type=int, default=None,
+                   help="seed 포함 총 악성문서 수. 예: --N 4 → doc0_seed+doc1~doc3")
     p.add_argument("--embed_device",    default="cuda")
     p.add_argument("--gen_batch_size",  type=int, default=1,
                    help="G 후보를 한 번에 몇 개씩 배치로 생성할지 (기본 1=순차). "
                         "G와 같게 설정하면 가장 빠름.")
     p.add_argument("--allow_train_input", action="store_true",
                    help="훈련 쿼리 데이터셋 입력 허용 (기본 비허용)")
-    return p.parse_args()
+    args = p.parse_args()
+    if args.N is not None:
+        if args.N < 2:
+            p.error("--N은 최소 2 이상이어야 합니다 (seed 1개 + 추가 문서 1개 이상).")
+        args.num_adv_docs = args.N - 1
+    if args.num_adv_docs < 1:
+        p.error("--num_adv_docs는 최소 1 이상이어야 합니다 (seed 제외 추가 문서 수).")
+    return args
 
 _TRAIN_KEYWORDS = ["_train", "pd_7b", "pd_7", "nq_500", "nq_800", "nq_350", "nq_600"]
 
@@ -138,6 +146,7 @@ def main():
     print("[tfidf] Vectorizer fitted")
 
     # ── 추론 ─────────────────────────────────────────────────────────
+    print(f"[cfg] G={args.group_size}, N={args.num_adv_docs + 1} (seed 포함)")
     out_df = v7.infer_poison_docs(
         model=model,
         tokenizer=tokenizer,
@@ -165,7 +174,13 @@ def main():
     print(f"[post] number correction + target injection applied → {doc_cols}")
 
     out_df.to_csv(args.output, index=False)
-    _meta = {"num_correction_applied": True, "generated_by": __file__, "output": args.output}
+    _meta = {
+        "num_correction_applied": True,
+        "generated_by": __file__,
+        "output": args.output,
+        "group_size": args.group_size,
+        "N": args.num_adv_docs + 1,
+    }
     with open(args.output.replace(".csv", ".meta.json"), "w") as _mf:
         json.dump(_meta, _mf, indent=2)
     print(f"[done] Saved {len(out_df)} rows → {args.output}")
