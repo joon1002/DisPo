@@ -12,3 +12,4 @@ __pycache__/
 *.safetensors
 eval/model_configs/gpt4o_mini_config.json
 !eval/clean_topn_cache/**/*.pt
+data/DiPoison_N4_cont_vic/

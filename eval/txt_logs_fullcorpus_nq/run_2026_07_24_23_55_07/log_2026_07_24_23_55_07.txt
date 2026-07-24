@@ -1,0 +1,31 @@
+
+=== RUN_CONFIG ===
+{
+  "dataset": "nq",
+  "retrieval_model": "contriever",
+  "model_hf": "facebook/contriever",
+  "docs_csv": "../data/attackbaselines_pd/PoisonedRAG/poisonedrag1_nq100.csv",
+  "top_k": 5,
+  "adv_per_query": 1,
+  "model_config_path": "model_configs/vicuna7b_config.json",
+  "model_name": "vicuna",
+  "device": "cuda:0",
+  "embed_batch": 512,
+  "use_cosine": false,
+  "dpr_query_encoder": "ctx",
+  "clean_topn_cache": "clean_topn_cache/nq_merged_val100_top50/contriever_top50.pt"
+}
+
+[load] retriever 로딩: facebook/contriever
+[load] Contriever-family 완료 → cuda:0
+
+[load] corpus 로딩: /data1/joonhyung/datasets/nq/corpus.jsonl
+[load] corpus 2,681,468 passages
+[topn] clean top-50 cache 로드: clean_topn_cache/nq_merged_val100_top50/contriever_top50.pt
+[topn] queries=100 dtype=float16 scorer=dot
+[embed] clean top-N cache 사용 → corpus embedding GPU 전송 생략
+[load] qrels: 3,452 queries
+[load] NQ q_to_beir_id: 100
+[load] RAGDefender defense model (MiniLM)...
+[load] defense model 완료
+[load] LLM via create_model: model_configs/vicuna7b_config.json
