@@ -1,0 +1,82 @@
+
+=== RUN_CONFIG ===
+{
+  "dataset": "nq",
+  "retrieval_model": "contriever",
+  "model_hf": "facebook/contriever",
+  "docs_csv": "../data/paraphrase_pd/jointgcg/jointgcg4_nq100_para.csv",
+  "top_k": 5,
+  "adv_per_query": 4,
+  "model_config_path": "model_configs/vicuna7b_config.json",
+  "model_name": "vicuna",
+  "device": "cuda:0",
+  "embed_batch": 512,
+  "use_cosine": false,
+  "dpr_query_encoder": "ctx",
+  "clean_topn_cache": ""
+}
+
+[load] retriever 로딩: facebook/contriever
+[load] Contriever-family 완료 → cuda:0
+
+[load] corpus 로딩: /data1/joonhyung/datasets/nq/corpus.jsonl
+[load] corpus 2,681,468 passages
+[embed] 캐시 로드: /data1/joonhyung/datasets/nq/contriever_embs_fullcorpus.pt
+[embed] 로드 완료: torch.Size([2681468, 768])
+[embed] GPU 전송 중... (2,681,468 × 768)
+[embed] GPU 전송 완료. dtype=float16  GPU 메모리: 4.6 GB
+[load] qrels: 3,452 queries
+[load] NQ q_to_beir_id: 100
+[load] RAGDefender defense model (MiniLM)...
+[load] defense model 완료
+[load] LLM via create_model: model_configs/vicuna7b_config.json
+[load] LLM: provider=vicuna | name=lmsys/vicuna-7b-v1.3
+[load] docs_csv: 100 rows, cols=['query', 'target_answer', 'correct_answer', 'doc0_seed', 'doc1', 'doc2', 'doc3']
+[prep] 100 valid queries (skipped=0)
+
+============================================================
+  [Full-corpus eval] NQ  N=100
+  corpus size: 2,681,468
+  지표                                           값
+  ---------------------------------------------
+  ND-ASR                                   83.0%
+  RD-ASR                                   14.0%
+  ND-Accuracy                              16.0%
+  RD-Accuracy                              47.0%
+  Retrieval rate (쿼리 중 adv 포함률)            99.0%
+  [ND] Poison recall (top-k 내 adv 비율)      98.0%
+  [ND] Poison precision                    78.4%
+  [ND] Poison F1                           87.1%
+  [RD] Poison recall (방어 후 생존율)             4.0%
+  [RD] Poison precision                    13.7%
+  [RD] Poison F1                            6.2%
+============================================================
+
+=== FINAL_RESULTS ===
+{
+  "dataset": "nq",
+  "corpus_size": 2681468,
+  "retrieval_mode": "full_corpus_contriever",
+  "no_defense": {
+    "num_queries": 100,
+    "ASR": 0.83,
+    "Accuracy": 0.16,
+    "retrieval_rate": 0.99,
+    "poison_recall": 0.98,
+    "poison_precision": 0.784,
+    "poison_f1": 0.8711
+  },
+  "ragdefender": {
+    "num_queries": 100,
+    "ASR": 0.14,
+    "Accuracy": 0.47,
+    "poison_recall_after": 0.04,
+    "poison_precision_after": 0.1368,
+    "poison_f1_after": 0.0619
+  },
+  "delta": {
+    "ASR_sub": "-69.0%"
+  }
+}
+[save] /data1/joonhyung/DisPo/eval/txt_logs_fullcorpus_nq/run_2026_07_25_05_23_05/results_para_jointgcg4_2026_07_25_05_26_08.csv
+[save] /data1/joonhyung/DisPo/eval/txt_logs_fullcorpus_nq/run_2026_07_25_05_23_05/final.json

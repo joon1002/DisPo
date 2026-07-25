@@ -1,0 +1,25 @@
+{
+  "dataset": "nq",
+  "corpus_size": 2681468,
+  "retrieval_mode": "full_corpus_contriever",
+  "no_defense": {
+    "num_queries": 100,
+    "ASR": 0.82,
+    "Accuracy": 0.1,
+    "retrieval_rate": 1.0,
+    "poison_recall": 0.9575,
+    "poison_precision": 0.766,
+    "poison_f1": 0.8511
+  },
+  "ragdefender": {
+    "num_queries": 100,
+    "ASR": 0.08,
+    "Accuracy": 0.43,
+    "poison_recall_after": 0.0425,
+    "poison_precision_after": 0.1382,
+    "poison_f1_after": 0.065
+  },
+  "delta": {
+    "ASR_sub": "-74.0%"
+  }
+}
