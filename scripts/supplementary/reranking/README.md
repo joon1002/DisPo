@@ -4,8 +4,8 @@ This script evaluates an input malicious-document CSV on NQ single-hop full-corp
 
 Fixed pipeline:
 
-1. `facebook/contriever` retrieves top-50 from the NQ corpus plus injected malicious docs.
-2. `cross-encoder/ms-marco-TinyBERT-L-2-v2` reranks the top-50 and keeps top-5.
+1. `facebook/contriever` retrieves top-20 from the NQ corpus plus injected malicious docs.
+2. `cross-encoder/ms-marco-TinyBERT-L-2-v2` reranks the top-20 and keeps top-5.
 3. `ND-ASR`: top-5 goes directly to the Vicuna-7B generator.
 4. `RD-ASR`: top-5 goes through RAGDefender with `paraphrase-MiniLM-L6-v2`, then to the same Vicuna-7B generator.
 
@@ -29,7 +29,7 @@ CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 python -m scripts.supplementary.rera
   --docs_csv data/generated/your_attack.csv \
   --data_root /data/joonhyung \
   --adv_per_query 4 \
-  --ret_top_n 50 \
+  --ret_top_n 20 \
   --top_k 5 \
   --gpu_id 0
 ```

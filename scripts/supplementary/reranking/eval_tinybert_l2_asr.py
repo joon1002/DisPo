@@ -41,7 +41,7 @@ def parse_args():
     parser.add_argument("--data_root", default="/data/joonhyung", help="Root containing datasets/nq/* files.")
     parser.add_argument("--output_dir", default="scripts/supplementary/reranking/results")
     parser.add_argument("--adv_per_query", type=int, default=4)
-    parser.add_argument("--ret_top_n", type=int, default=50, help="Contriever candidates passed to TinyBERT-L2.")
+    parser.add_argument("--ret_top_n", type=int, default=20, help="Contriever candidates passed to TinyBERT-L2.")
     parser.add_argument("--top_k", type=int, default=5, help="Final documents passed to generator/RAGDefender.")
     parser.add_argument("--gpu_id", type=int, default=0)
     parser.add_argument("--seed", type=int, default=12)
