@@ -1,0 +1,25 @@
+{
+  "dataset": "msmarco",
+  "corpus_size": 8841823,
+  "retrieval_mode": "full_corpus_contriever",
+  "no_defense": {
+    "num_queries": 100,
+    "ASR": 0.72,
+    "Accuracy": 0.08,
+    "retrieval_rate": 0.99,
+    "poison_recall": 0.92,
+    "poison_precision": 0.736,
+    "poison_f1": 0.8178
+  },
+  "ragdefender": {
+    "num_queries": 100,
+    "ASR": 0.08,
+    "Accuracy": 0.7,
+    "poison_recall_after": 0.0225,
+    "poison_precision_after": 0.0744,
+    "poison_f1_after": 0.0345
+  },
+  "delta": {
+    "ASR_sub": "-64.0%"
+  }
+}
