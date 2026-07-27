@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Full-corpus NQ single-hop ASR evaluation with fixed components:
-  Contriever -> TinyBERT-L2 reranking -> Mistral/no-defense ASR
-  Contriever -> TinyBERT-L2 reranking -> RAGDefender(MiniLM) -> Mistral RD-ASR
+  Contriever -> TinyBERT-L2 reranking -> Vicuna-7B no-defense ASR
+  Contriever -> TinyBERT-L2 reranking -> RAGDefender(MiniLM) -> Vicuna-7B RD-ASR
 """
 
 import argparse
@@ -19,12 +19,12 @@ from tqdm import tqdm
 
 from scripts.supplementary.common_eval import (
     CONTRIEVER_MODEL,
-    MISTRAL_7B_MODEL,
     RAGDEFENDER_MODEL,
     TINYBERT_L2_RERANKER,
+    VICUNA_7B_MODEL,
     accuracy_hit,
     asr_hit,
-    create_mistral_llm,
+    create_vicuna_llm,
     load_attack_entries,
     load_contriever,
     load_nq_corpus_and_embs,
@@ -45,8 +45,8 @@ def parse_args():
     parser.add_argument("--top_k", type=int, default=5, help="Final documents passed to generator/RAGDefender.")
     parser.add_argument("--gpu_id", type=int, default=0)
     parser.add_argument("--seed", type=int, default=12)
-    parser.add_argument("--mistral_model", default=MISTRAL_7B_MODEL)
-    parser.add_argument("--model_config_path", default=None, help="Optional eval/src model config. Overrides --mistral_model.")
+    parser.add_argument("--vicuna_model", default=VICUNA_7B_MODEL)
+    parser.add_argument("--model_config_path", default=None, help="Optional eval/src model config. Overrides --vicuna_model.")
     parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument("--max_new_tokens", type=int, default=150)
     return parser.parse_args()
@@ -80,9 +80,9 @@ def main():
     log(f"[load] ragdefender_model={RAGDEFENDER_MODEL}")
     defense_model = SentenceTransformer(RAGDEFENDER_MODEL, device=device)
 
-    log(f"[load] generator=Mistral-7B ({args.model_config_path or args.mistral_model})")
-    llm = create_mistral_llm(
-        model_name=args.mistral_model,
+    log(f"[load] generator=Vicuna-7B ({args.model_config_path or args.vicuna_model})")
+    llm = create_vicuna_llm(
+        model_name=args.vicuna_model,
         model_config_path=args.model_config_path,
         temperature=args.temperature,
         max_new_tokens=args.max_new_tokens,
@@ -158,7 +158,7 @@ def main():
         "retriever": CONTRIEVER_MODEL,
         "reranker": TINYBERT_L2_RERANKER,
         "ragdefender": RAGDEFENDER_MODEL,
-        "generator": args.model_config_path or args.mistral_model,
+        "generator": args.model_config_path or args.vicuna_model,
         "ret_top_n": args.ret_top_n,
         "top_k": args.top_k,
         "adv_per_query": args.adv_per_query,

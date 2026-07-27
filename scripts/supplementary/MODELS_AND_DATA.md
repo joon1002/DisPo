@@ -7,7 +7,7 @@ The supplementary scripts do not commit model weights or the NQ corpus. A new se
 Install the project dependencies first:
 
 ```bash
-pip install torch transformers accelerate sentence-transformers scikit-learn tqdm pandas numpy nltk
+pip install torch transformers accelerate sentence-transformers scikit-learn tqdm pandas numpy nltk fschat==0.2.36
 ```
 
 ## Hugging Face models
@@ -15,9 +15,18 @@ pip install torch transformers accelerate sentence-transformers scikit-learn tqd
 - Retriever: `facebook/contriever`
 - Reranker: `cross-encoder/ms-marco-TinyBERT-L-2-v2`
 - RAGDefender embedding model: `paraphrase-MiniLM-L6-v2`
-- RobustRAG / generator LLM: `mistralai/Mistral-7B-Instruct-v0.3`
+- Reranking generator LLM: `lmsys/vicuna-7b-v1.3`
+- RobustRAG generator LLM: `mistralai/Mistral-7B-Instruct-v0.3`
 
-If Mistral is already stored locally, pass it with:
+If Vicuna is already stored locally for the reranking experiment, pass it with:
+
+```bash
+python -m scripts.supplementary.reranking.eval_tinybert_l2_asr \
+  --docs_csv data/generated/your_attack.csv \
+  --vicuna_model /path/to/vicuna-7b-v1.3
+```
+
+If Mistral is already stored locally for the RobustRAG experiment, pass it with:
 
 ```bash
 python -m scripts.supplementary.robustrag.eval_mistral7b_asr \
@@ -26,6 +35,12 @@ python -m scripts.supplementary.robustrag.eval_mistral7b_asr \
 ```
 
 You can also use an existing `eval/src` model config:
+
+```bash
+python -m scripts.supplementary.reranking.eval_tinybert_l2_asr \
+  --docs_csv data/generated/your_attack.csv \
+  --model_config_path eval/model_configs/vicuna7b_config.json
+```
 
 ```bash
 python -m scripts.supplementary.robustrag.eval_mistral7b_asr \

@@ -28,6 +28,7 @@ from src.prompts import wrap_prompt as legacy_wrap_prompt
 CONTRIEVER_MODEL = "facebook/contriever"
 RAGDEFENDER_MODEL = "paraphrase-MiniLM-L6-v2"
 TINYBERT_L2_RERANKER = "cross-encoder/ms-marco-TinyBERT-L-2-v2"
+VICUNA_7B_MODEL = "lmsys/vicuna-7b-v1.3"
 MISTRAL_7B_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
 
 
@@ -197,6 +198,31 @@ def create_mistral_llm(model_name, model_config_path, temperature, max_new_token
         },
     }
     return HFChat(config)
+
+
+def create_vicuna_llm(model_name, model_config_path, temperature, max_new_tokens):
+    if model_config_path:
+        return create_model(str(resolve_path(model_config_path)))
+    from src.models.Vicuna import Vicuna
+
+    config = {
+        "model_info": {"provider": "vicuna", "name": model_name},
+        "api_key_info": {"api_keys": [0], "api_key_use": 0},
+        "params": {
+            "temperature": temperature,
+            "seed": 100,
+            "gpus": [0] if torch.cuda.is_available() else [],
+            "max_output_tokens": max_new_tokens,
+            "repetition_penalty": 1.0,
+            "device": "cuda" if torch.cuda.is_available() else "cpu",
+            "max_gpu_memory": None,
+            "revision": "main",
+            "load_8bit": "False",
+            "debug": "False",
+            "cpu_offloading": "False",
+        },
+    }
+    return Vicuna(config)
 
 
 def standard_rag_answer(question, docs, llm):
