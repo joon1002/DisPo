@@ -20,7 +20,6 @@ import argparse
 import ast
 import glob
 import shutil
-import sys
 
 import pandas as pd
 

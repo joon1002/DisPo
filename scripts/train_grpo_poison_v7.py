@@ -33,7 +33,6 @@ import json
 import math
 import os
 import random
-import re
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -90,9 +89,9 @@ MAX_PROMPT_TOKENS = 768
 DOT_FLOOR   = 0.40
 DOT_CEILING = 1.50
 
-# ── 패널티 상수 (모두 additive) ────────────────────────────────────────────
-COLLAPSE_PENALTY           = -3.0   # doc quality fail → replacement (극단적 붕괴)
-TARGET_MISSING_PENALTY_ADD =  2.0   # target 미포함 시 차감 (additive → std 보존)
+# ── 패널티 상수 (모두 additive) — 논문 Eq.7의 β_col / β_pay에 대응 ──────────
+COLLAPSE_PENALTY           = -3.0   # doc quality fail → replacement (극단적 붕괴). Eq.7 β_col=-3.0
+TARGET_MISSING_PENALTY_ADD =  2.0   # target 미포함 시 차감 (additive → std 보존). Eq.7 β_pay=2.0
 QUERY_REPEAT_PENALTY       = -0.4   # 쿼리 반복 1회당 차감
 MIN_DOC_WORDS              = 30
 MIN_UNIQUE_WORD_RATIO      = 0.15
@@ -207,6 +206,11 @@ class UncertaintyWeighter(nn.Module):
       w_i  = 1 / (2 σ_i²)
       R    = Σ_i w_i · r_i
       L_uncert = Σ_i log(σ_i)
+
+    NOTE (paper-vs-code): 논문 Eq.6은 R0(d)=Σr_k를 명시적으로 "weight-free"(가중치 없는 합)로
+    정의하지만, 실제 학습 코드는 여기 Kendall(2018) 스타일의 학습되는 uncertainty weight로
+    5개 보상을 결합한다. 즉 R은 Eq.6의 unweighted sum이 아니라 학습되는 가중합이며,
+    아래 uncert_loss(Σlog σ_i)도 논문 Eq.11의 손실식에는 없는 추가 항이다.
     """
     def __init__(self, n_tasks: int = 5):
         super().__init__()
@@ -244,19 +248,8 @@ def _get_contriever_dot(doc: str, query: str) -> float:
     return float(np.dot(q_emb, d_emb))
 
 
-def r_retrieval(doc: str, query: str) -> float:
-    """Contriever raw dot product → 선형 정규화 [0, 1].
-    단조증가: dot product 높을수록 r 높음.
-    실측 분포: Min=0.484, Max=1.296, Mean=1.002
-    DOT_FLOOR=0.40 (기준선), DOT_CEILING=1.50 (최대 여유 포함)
-    - dot=0.50 → 0.09 | dot=1.00 → 0.55 | dot=1.30 → 0.82
-    """
-    dot = _get_contriever_dot(doc, query)
-    return float(max(0.0, min(1.0, (dot - DOT_FLOOR) / (DOT_CEILING - DOT_FLOOR))))
-
-
 def r_disp_embed(doc: str, context_docs: List[str]) -> float:
-    """Inter-doc MiniLM cosine similarity → 1 - inter_sim. [Stage 2 bypass]
+    """Paper Eq.2 (r_emb): inter-doc MiniLM cosine similarity → 1 - inter_sim. [Stage 2 bypass]
     RAGDefender가 cosine 기반으로 탐지 → MiniLM cosine으로 학습.
     """
     if not doc.strip() or not context_docs:
@@ -276,7 +269,7 @@ def r_disp_embed(doc: str, context_docs: List[str]) -> float:
 
 
 def r_tfidf_disp(doc: str, context_docs: List[str]) -> float:
-    """Inter-doc TF-IDF cosine similarity. Want LOW. reward = 1 - inter_sim. [Stage 1 bypass]"""
+    """Paper Eq.3 (r_lex): inter-doc TF-IDF cosine similarity. Want LOW. reward = 1 - inter_sim. [Stage 1 bypass]"""
     if not _tfidf_fitted or not doc.strip() or not context_docs:
         return 1.0
     d_vec = _tfidf_vec(doc)
@@ -291,7 +284,7 @@ def r_tfidf_disp(doc: str, context_docs: List[str]) -> float:
 
 
 def r_generation(doc: str, query: str, target: str) -> float:
-    """P(target_answer | RAG_prompt(doc, query)) via Vicuna-7B."""
+    """Paper Eq.4 (r_pay): sigma(-NLL(target|RAG_prompt(doc, query)) + 2.0) via Vicuna-7B."""
     if not doc.strip():
         return 0.5
 
@@ -320,7 +313,7 @@ def r_generation(doc: str, query: str, target: str) -> float:
 
 
 def r_ppl(doc: str) -> float:
-    """Vicuna-7B PPL on doc alone. Low PPL → high reward."""
+    """Paper Eq.5 (r_flu): sigma(-log(PPL/20)) via Vicuna-7B. Low PPL → high reward."""
     if not doc.strip():
         return 0.0
     input_ids = _vicuna_tokenizer(
@@ -359,7 +352,7 @@ def compute_reward_vector(
     """
     dot = _get_contriever_dot(doc, query)
     return np.array([
-        float(max(0.0, min(1.0, (dot - DOT_FLOOR) / (DOT_CEILING - DOT_FLOOR)))),  # r_retrieval
+        float(max(0.0, min(1.0, (dot - DOT_FLOOR) / (DOT_CEILING - DOT_FLOOR)))),  # Eq.1 r_retrieval
         r_disp_embed(doc, context_docs),                                             # r_disp_embed
         r_tfidf_disp(doc, context_docs),                                             # r_tfidf_disp
         r_generation(doc, query, target),                                            # r_generation
@@ -373,6 +366,7 @@ def compute_reward_vector(
 def soft_kendall_loss(
     log_probs: torch.Tensor, rewards: torch.Tensor, scale: float = 10.0
 ) -> torch.Tensor:
+    """Paper Eq.9 (rank-agreement rho_hat, sign(sigma) proxy) + Eq.10 (L_rank=(1-rho_hat)/2)."""
     lp_diff = log_probs.unsqueeze(0) - log_probs.unsqueeze(1)
     r_diff  = rewards.unsqueeze(0)   - rewards.unsqueeze(1)
     s_lp = 2.0 * torch.sigmoid(scale * lp_diff) - 1.0
@@ -387,6 +381,7 @@ def soft_kendall_loss(
 def grpo_loss(
     log_probs: torch.Tensor, rewards: torch.Tensor
 ) -> torch.Tensor:
+    """Paper Eq.8: group-relative advantage A_hat_i, clipped to [-2, 2]; GRPO policy-gradient loss."""
     adv = (rewards - rewards.mean()) / (rewards.std() + 1e-8)
     adv = torch.clamp(adv, -ADV_CLIP, ADV_CLIP)  # 고보상 수렴시 std↓→adv↑→overshooting 방지
     return -(adv.detach() * log_probs).mean()
@@ -578,6 +573,10 @@ def train_position(
       1. Hard:     doc quality fail → combined_mod[i] = COLLAPSE_PENALTY (-3.0) [replacement]
       2. Additive: target 미포함  → combined_mod[i] -= TARGET_MISSING_PENALTY_ADD (2.0)
       3. Additive: query 반복     → combined_mod[i] += QUERY_REPEAT_PENALTY × (n-1)
+
+    최종 loss = l_grpo(Eq.8) + lam_k·l_kend(Eq.9-10) + uncert_loss
+      → 논문 Eq.11(L = L_grpo + λ_rank·L_rank)에 uncert_loss(UncertaintyWeighter 정규화 항)가
+        추가된 형태. uncert_loss는 논문 수식에는 없음 — 위 UncertaintyWeighter 클래스 참고.
     """
     context_docs = [seed] + prev_docs
     prompt_text = format_prompt(tokenizer, query, target, seed, prev_docs)

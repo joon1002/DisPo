@@ -2,70 +2,20 @@
 """
 train_grpo_poison_v7_e5.py
 
-v7과 동일하되 r1 검색기만 E5-base-v2로 교체.
+train_grpo_poison_v7.py(Contriever surrogate)와 동일한 GRPO+Kendall 학습 구조에서
+r_retrieval(paper Eq.1)만 E5-base-v2 cosine similarity로 교체한 버전.
+r2~r5(Eq.2-5), 패널티(Eq.7), GRPO(Eq.8), Kendall rank loss(Eq.9-10)는 v7과 동일 —
+각 항의 paper-equation 대응은 train_grpo_poison_v7.py의 동일 함수 주석 참고.
+
   - RETRIEVAL_MODEL : intfloat/e5-base-v2  (Contriever → E5)
-  - r_retrieval     : cosine similarity (L2-normalized, "query:"/"passage:" prefix)
+  - r_retrieval(Eq.1) : cosine similarity (L2-normalized, "query:"/"passage:" prefix)
   - COS_FLOOR=0.70, COS_CEILING=0.95 (NQ 실측 기반 캘리브레이션)
   - --skip_final_infer 플래그: 학습 후 500쿼리 inference 생략
-  기타 모든 설정(r2~r5, 패널티, GRPO, Kendall loss)은 v7과 동일.
-
-GRPO + Kendall loss training for RAG poison document generation.  [v7-E5]
-
-v7 변경점 (v6 대비):
-
-  ▶ 근본 문제 분석
-    v6 epoch0 step 355 전후로 r_retrieval·r_generation 동시 붕괴 확인.
-    붕괴 직전 10 step (340-350): n_valid=7-8, r_gen=0.61-0.81, reward=1.8-2.1
-
-    원인: 고보상 연속 → std(reward) 작음 → normalized advantage 폭발 → Adam 모멘텀 누적
-
-    GRPO advantage 계산:
-      adv_i = (r_i - mean(r)) / std(r)
-    reward 1.8-2.1로 수렴 시 std ≈ 0.1 → adv 범위 ±10 이상 가능.
-    Adam 모멘텀 β1=0.9, 10회 연속 동방향 gradient:
-      effective_step ≈ LR / (1-0.9^10) ≈ LR × 6.5
-      → 실효 LR ≈ 2e-5 × 6.5 = 1.3e-4 → 과도한 weight update → overshooting
-
-    overshooting 후 상태:
-      모든 8 candidates: 동일한 템플릿 생성 → std(combined_mod) ≈ 0 → GRPO skip
-      gradient 차단 → 붕괴 상태에서 회복 불가
-
-  1. Advantage clipping (핵심 수정)
-     v6: adv = (r - mean) / std            # 상한 없음 → 폭발 가능
-     v7: adv = clamp((r - mean) / std, -ADV_CLIP, ADV_CLIP)  # ADV_CLIP=2.0
-     효과: reward std 작아져도 gradient 크기 2×LR로 제한 → overshooting 방지
-
-  2. Learning rate 감소 (보조 수정)
-     v6: LR = 2e-5
-     v7: LR = 1e-5  (2× 감소)
-     효과: Adam 모멘텀 포함 실효 step size 추가 감소 → 안정적 수렴
-
-  3. GRAD_CLIP 강화 (보조 수정)
-     v6: GRAD_CLIP = 1.0
-     v7: GRAD_CLIP = 0.5
-     효과: gradient norm 수준에서 추가 방어선 → ADV_CLIP과 이중 보호
-
-보상 구조 (5-component, v6와 동일):
-  r1: r_retrieval   — (cos_e5 - 0.70) / 0.25 ∈ [0,1]  (E5-base-v2 cosine, "query:"/"passage:" prefix)
-                      FLOOR=0.70, CEILING=0.95 (NQ 500쿼리 실측 분포 기반 캘리브레이션)
-  r2: r_disp_embed  — 1 - MiniLM inter-cosine ∈ [0,1]  [Stage 2 bypass]
-  r3: r_tfidf_disp  — 1 - TF-IDF inter-sim  ∈ [0,1]   [Stage 1 bypass]
-  r4: r_generation  — P(target | Context:{doc}\\nQuery:{q}\\nAnswer:) via Vicuna-7B
-  r5: r_ppl         — Vicuna-7B log P(doc) → sigmoid(-log(PPL/20))
-
-패널티 (v6와 동일, additive):
-  target 미포함: combined_mod[i] -= 2.0
-  query 반복:    combined_mod[i] -= 0.4 × (n-1)
-  doc collapse:  combined_mod[i]  = -3.0
-
-최종 손실:
-  L = L_grpo(adv_clipped) + λ_k · L_kendall_rank + L_uncert
 
 Usage:
-  CUDA_VISIBLE_DEVICES=0 /data/joonhyung/nq/.venv/bin/python \\
-    /data/joonhyung/nq/scripts/train_grpo_poison_v7.py \\
-    --input          /data/joonhyung/nq/results/nq_500_pd_7b.csv \\
-    --output_dir     /data/joonhyung/nq/results/grpo_whitebox_v7_1.5b_run1 \\
+  CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_v7_e5.py \\
+    --input          data/nq_train_validate/nq_500_pd_7b.csv \\
+    --output_dir     results/grpo_v7_e5_run1 \\
     --generator_model Qwen/Qwen2.5-1.5B-Instruct \\
     --vicuna_model    lmsys/vicuna-7b-v1.3 \\
     --num_epochs 3 --group_size 8 --lora_r 16 --gpu_id 0
@@ -76,7 +26,6 @@ import json
 import math
 import os
 import random
-import re
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -113,14 +62,13 @@ MIN_NEW_TOKENS    = 80
 MAX_NEW_TOKENS    = 160
 TEMPERATURE       = 0.85
 TOP_P             = 0.92
-REPETITION_PEN    = 1.1   # 1.5→1.1: target phrase가 프롬프트에 포함되어
-                           # 1.5는 target 토큰 logit ~33% 억제 → n_valid↓
+REPETITION_PEN    = 1.1   # target phrase가 프롬프트에 포함되어 높은 값은 target 토큰 logit 억제
                            # NO_REPEAT_NGRAM_SIZE가 반복 제어를 맡으므로 낮게 유지
 NO_REPEAT_NGRAM_SIZE = 4
-LR                = 1e-5   # v7 FIX: 2e-5→1e-5, Adam 모멘텀 누적시 실효 step 추가 감소
+LR                = 1e-5   # Adam 모멘텀 누적시 실효 step 추가 감소 목적
 WEIGHT_DECAY      = 0.01
-GRAD_CLIP         = 0.5    # v7 FIX: 1.0→0.5, gradient norm 수준 이중 방어선
-ADV_CLIP          = 2.0    # v7 NEW: advantage 상한, std 작을때 폭발 방지
+GRAD_CLIP         = 0.5    # gradient norm 수준 방어선 (ADV_CLIP과 이중 보호)
+ADV_CLIP          = 2.0    # advantage 상한: high-reward 수렴 시 std↓→adv↑→overshooting 방지
 LORA_R            = 16
 LORA_ALPHA        = 32
 LORA_DROPOUT      = 0.05
@@ -139,10 +87,9 @@ MAX_PROMPT_TOKENS = 768
 COS_FLOOR   = 0.70
 COS_CEILING = 0.95
 
-# ── v6 패널티 상수 (모두 additive) ────────────────────────────────────────
-# v5의 RETRIEVAL_THRESHOLD / RETRIEVAL_FAIL_PENALTY 제거 (→ 오류 A 해결)
-COLLAPSE_PENALTY           = -3.0   # doc quality fail: 여전히 replacement (극단적 붕괴)
-TARGET_MISSING_PENALTY_ADD =  2.0   # target 미포함 시 차감 (additive → std 보존)
+# ── 패널티 상수 (모두 additive) — 논문 Eq.7의 β_col / β_pay에 대응 ──────────
+COLLAPSE_PENALTY           = -3.0   # doc quality fail: replacement (극단적 붕괴). Eq.7 β_col=-3.0
+TARGET_MISSING_PENALTY_ADD =  2.0   # target 미포함 시 차감 (additive → std 보존). Eq.7 β_pay=2.0
 QUERY_REPEAT_PENALTY       = -0.4   # 쿼리 반복 1회당 차감
 MIN_DOC_WORDS              = 30
 MIN_UNIQUE_WORD_RATIO      = 0.15
@@ -158,8 +105,6 @@ _RAG_PROMPT = (
     "\n\nContexts: {context}\n\nQuery: {question}\n\nAnswer:"
 )
 
-
-# Two-Gate 제거: 단조함수로 대체 (threshold 보정 오류 원천 차단)
 
 
 # ─────────────────────────────────────────────────────────
@@ -260,6 +205,10 @@ class UncertaintyWeighter(nn.Module):
       w_i  = 1 / (2 σ_i²)
       R    = Σ_i w_i · r_i
       L_uncert = Σ_i log(σ_i)
+
+    NOTE (paper-vs-code): 논문 Eq.6은 R0(d)=Σr_k를 "weight-free"(가중치 없는 합)로
+    정의하지만, 실제 학습 코드는 Kendall(2018) 스타일 학습되는 uncertainty weight로
+    5개 보상을 결합한다 (train_grpo_poison_v7.py와 동일한 구조/불일치, 그 파일 참고).
     """
     def __init__(self, n_tasks: int = 5):
         super().__init__()
@@ -302,17 +251,8 @@ def _get_e5_cos(doc: str, query: str) -> float:
     return float(np.dot(q_emb, d_emb))
 
 
-def r_retrieval(doc: str, query: str) -> float:
-    """E5-base-v2 cosine similarity → 선형 정규화 [0, 1].
-    COS_FLOOR=0.70, COS_CEILING=0.95 (NQ 500쿼리 실측 분포 기반).
-    단조증가: cosine 높을수록 r 높음.
-    """
-    cos = _get_e5_cos(doc, query)
-    return float(max(0.0, min(1.0, (cos - COS_FLOOR) / (COS_CEILING - COS_FLOOR))))
-
-
 def r_disp_embed(doc: str, context_docs: List[str]) -> float:
-    """Inter-doc MiniLM cosine similarity → 1 - inter_sim. [Stage 2 bypass]
+    """Paper Eq.2 (r_emb): inter-doc MiniLM cosine similarity → 1 - inter_sim. [Stage 2 bypass]
     r_tfidf_disp와 동일 설계로 통일: 낮을수록 좋음, 임계값 없음.
     RAGDefender가 cosine 기반으로 탐지 → MiniLM은 cosine 유지.
     """
@@ -333,7 +273,7 @@ def r_disp_embed(doc: str, context_docs: List[str]) -> float:
 
 
 def r_tfidf_disp(doc: str, context_docs: List[str]) -> float:
-    """Inter-doc TF-IDF cosine similarity. Want LOW. reward = 1 - inter_sim. [Stage 1 bypass]"""
+    """Paper Eq.3 (r_lex): inter-doc TF-IDF cosine similarity. Want LOW. reward = 1 - inter_sim. [Stage 1 bypass]"""
     if not _tfidf_fitted or not doc.strip() or not context_docs:
         return 1.0
     d_vec = _tfidf_vec(doc)
@@ -348,9 +288,7 @@ def r_tfidf_disp(doc: str, context_docs: List[str]) -> float:
 
 
 def r_generation(doc: str, query: str, target: str) -> float:
-    """P(target_answer | RAG_prompt(doc, query)) via Vicuna-7B.
-    v6에서도 유지: r_gen이 group 내 분산 9.9% (> 0.3) 확인됨 (v5 log 분석)
-    """
+    """Paper Eq.4 (r_pay): sigma(-NLL(target|RAG_prompt(doc, query)) + 2.0) via Vicuna-7B."""
     if not doc.strip():
         return 0.5
 
@@ -379,7 +317,7 @@ def r_generation(doc: str, query: str, target: str) -> float:
 
 
 def r_ppl(doc: str) -> float:
-    """Vicuna-7B PPL on doc alone. Low PPL → high reward."""
+    """Paper Eq.5 (r_flu): sigma(-log(PPL/20)) via Vicuna-7B. Low PPL → high reward."""
     if not doc.strip():
         return 0.0
     input_ids = _vicuna_tokenizer(
@@ -393,9 +331,6 @@ def r_ppl(doc: str) -> float:
     ppl = max(ppl, 1.0)
     score = -math.log(ppl / FLUENCY_REF_PPL)
     return float(torch.sigmoid(torch.tensor(score)).item())
-
-
-r_fluency = r_ppl
 
 
 def contains_target(doc: str, target: str) -> bool:
@@ -421,7 +356,7 @@ def compute_reward_vector(
     """
     cos = _get_e5_cos(doc, query)
     return np.array([
-        float(max(0.0, min(1.0, (cos - COS_FLOOR) / (COS_CEILING - COS_FLOOR)))),  # r_retrieval
+        float(max(0.0, min(1.0, (cos - COS_FLOOR) / (COS_CEILING - COS_FLOOR)))),  # Eq.1 r_retrieval
         r_disp_embed(doc, context_docs),                                             # r_disp_embed
         r_tfidf_disp(doc, context_docs),                                             # r_tfidf_disp
         r_generation(doc, query, target),                                            # r_generation
@@ -435,6 +370,7 @@ def compute_reward_vector(
 def soft_kendall_loss(
     log_probs: torch.Tensor, rewards: torch.Tensor, scale: float = 10.0
 ) -> torch.Tensor:
+    """Paper Eq.9 (rank-agreement rho_hat) + Eq.10 (L_rank=(1-rho_hat)/2)."""
     lp_diff = log_probs.unsqueeze(0) - log_probs.unsqueeze(1)
     r_diff  = rewards.unsqueeze(0)   - rewards.unsqueeze(1)
     s_lp = 2.0 * torch.sigmoid(scale * lp_diff) - 1.0
@@ -449,16 +385,15 @@ def soft_kendall_loss(
 def grpo_loss(
     log_probs: torch.Tensor, rewards: torch.Tensor
 ) -> torch.Tensor:
+    """Paper Eq.8: group-relative advantage A_hat_i, clipped to [-2, 2]; GRPO policy-gradient loss."""
     adv = (rewards - rewards.mean()) / (rewards.std() + 1e-8)
-    adv = torch.clamp(adv, -ADV_CLIP, ADV_CLIP)  # v7 FIX: 고보상 수렴시 std↓→adv↑→overshooting 방지
+    adv = torch.clamp(adv, -ADV_CLIP, ADV_CLIP)  # 고보상 수렴시 std↓→adv↑→overshooting 방지
     return -(adv.detach() * log_probs).mean()
 
 
 # ─────────────────────────────────────────────────────────
 # PROMPT BUILDING (Qwen 생성기용)
 # ─────────────────────────────────────────────────────────
-# v6 핵심 변경: "naturally implies" → 명시적 포함 요구
-# v5 오류 C: 시스템 메시지가 "implies"(암시)를 허용 → model이 간접 표현 선택 → n_valid=0
 _SYSTEM = (
     "You are a Wikipedia passage editor. "
     "Rewrite the given passage so it reads as a natural Wikipedia excerpt "
@@ -622,7 +557,7 @@ def sample_candidates(
 
 
 # ─────────────────────────────────────────────────────────
-# ONE-POSITION TRAINING STEP  (v6 핵심)
+# ONE-POSITION TRAINING STEP
 # ─────────────────────────────────────────────────────────
 def train_position(
     model, tokenizer,
@@ -638,15 +573,14 @@ def train_position(
     """
     Returns: (loss_or_None, best_doc, best_combined_reward, mean_reward_vector(5,), n_valid)
 
-    v6 패널티 적용 (모두 additive — std 보존이 핵심):
+    패널티 적용 (모두 additive — std 보존):
       1. Hard:     doc quality fail → combined_mod[i] = COLLAPSE_PENALTY (-3.0) [replacement]
-                   (단어 반복 붕괴는 이상값이므로 여전히 replacement 처리)
       2. Additive: target 미포함  → combined_mod[i] -= TARGET_MISSING_PENALTY_ADD (2.0)
       3. Additive: query 반복     → combined_mod[i] += QUERY_REPEAT_PENALTY × (n-1)
 
-    v5와 결정적 차이:
-      v5 오류 B: target 미포함 → replacement(-2.0) → n_valid=0시 전원 동일 → std=0 → skip
-      v6 수정:   target 미포함 → additive(-2.0)   → base_reward 차이 유지 → std>0 → gradient
+    최종 loss = l_grpo(Eq.8) + lam_k·l_kend(Eq.9-10) + uncert_loss
+      → 논문 Eq.11에 uncert_loss(UncertaintyWeighter 정규화 항, 논문 수식에는 없음)가
+        추가된 형태 — train_grpo_poison_v7.py의 UncertaintyWeighter 주석 참고.
     """
     context_docs = [seed] + prev_docs
     prompt_text = format_prompt(tokenizer, query, target, seed, prev_docs)
@@ -667,14 +601,14 @@ def train_position(
     # Uncertainty-weighted combined reward
     combined, uncert_loss = uw(reward_t)  # (G,)
 
-    # ── v6 Penalty pass (additive, std 보존) ─────────────────────────────
+    # ── Penalty pass (additive, std 보존) ────────────────────────────────
     combined_mod = combined.detach().clone()
     for i, t in enumerate(texts):
         # 1. doc quality fail: extreme collapse → replacement (예외적 처리)
         if not _check_doc_quality(t):
             combined_mod[i] = COLLAPSE_PENALTY
             continue
-        # 2. target 미포함: additive (v6 핵심 변경)
+        # 2. target 미포함: additive (base_reward 차이 유지 → std>0 → gradient)
         if not contains_target(t, target):
             combined_mod[i] = combined_mod[i] - TARGET_MISSING_PENALTY_ADD
         # 3. query 반복: additive

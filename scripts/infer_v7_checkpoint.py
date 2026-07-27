@@ -84,7 +84,6 @@ def parse_args():
 _TRAIN_KEYWORDS = ["_train", "pd_7b", "pd_7", "nq_500", "nq_800", "nq_350", "nq_600"]
 
 def _check_not_train_input(input_path: str):
-    import sys
     path_lower = input_path.lower()
     if any(kw in path_lower for kw in _TRAIN_KEYWORDS):
         sys.exit(
@@ -145,7 +144,7 @@ def main():
     v7.fit_tfidf(list(df["seed_doc"].astype(str)))
     print("[tfidf] Vectorizer fitted")
 
-    # ── 추론 ─────────────────────────────────────────────────────────
+    # ── 추론 (paper §3.2-3.3: Stage 2 정책으로 doc1..doc{N-1} 순차 생성 → Stage 3 주입 직전 산출물) ──
     print(f"[cfg] G={args.group_size}, N={args.num_adv_docs + 1} (seed 포함)")
     out_df = v7.infer_poison_docs(
         model=model,

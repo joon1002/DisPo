@@ -143,7 +143,7 @@ def main():
     v7.fit_tfidf(list(df["seed_doc"].astype(str)))
     print("[tfidf] Vectorizer fitted")
 
-    # N-1개 추가 생성 (seed 제외)
+    # N-1개 추가 생성 (seed 제외). paper §3.2-3.3: Stage 2 정책으로 순차 생성 → Stage 3 주입 직전 산출물
     print(f"[cfg] gen_batch_size={args.gen_batch_size} (G={args.group_size}개 후보 중 {args.gen_batch_size}개씩 배치 생성)")
     out_df = v7.infer_poison_docs(
         model=model,

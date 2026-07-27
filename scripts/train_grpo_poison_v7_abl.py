@@ -17,11 +17,17 @@ v7과 완전히 동일한 하이퍼파라미터, 보상 구조, 모델 설정.
   no_generation → r_generation 제외
   no_ppl        → r_ppl 제외
 
+각 --ablation 값이 제거하는 paper reward(§3.2)의 대응:
+  no_retrieval  → Eq.1 r_retrieval 제외 → Table 7 "w/o Retrieval" 행
+  no_disp_embed → Eq.2 r_disp_embed(=r_emb) 제외 → Table 7 "w/o Semantic Dispersion" 행
+  no_tfidf_disp → Eq.3 r_tfidf_disp(=r_lex) 제외 → Table 7 "w/o Lexical Dispersion" 행
+  no_generation → Eq.4 r_generation(=r_pay) 제외 → Table 7 "w/o Payload" 행
+  no_ppl        → Eq.5 r_ppl(=r_flu) 제외 → Table 7 "w/o Fluency" 행
+
 Usage:
-  CUDA_VISIBLE_DEVICES=1 /data_ssd/joonhyung/DisPo/.venv/bin/python \\
-    /data_ssd/joonhyung/DisPo/scripts/train_grpo_poison_v7_abl.py \\
+  CUDA_VISIBLE_DEVICES=1 python scripts/train_grpo_poison_v7_abl.py \\
     --ablation no_retrieval \\
-    --output_dir /data_ssd/joonhyung/DisPo/results/grpo_whitebox_v7_abl_no_ret_run1 \\
+    --output_dir results/grpo_whitebox_v7_abl_no_ret_run1 \\
     --num_epochs 1 --group_size 8 --lora_r 16 --gpu_id 1
 """
 
@@ -30,7 +36,6 @@ import json
 import math
 import os
 import random
-import re
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -55,14 +60,6 @@ GENERATOR_MODEL   = "Qwen/Qwen2.5-1.5B-Instruct"
 
 # ── Ablation 설정 ────────────────────────────────────────
 _ALL_TASKS = ["retrieval", "disp_embed", "tfidf_disp", "generation", "ppl"]
-_ABLATION_DIR_MAP = {
-    "none":          "grpo_whitebox_v7_abl_none_run1",
-    "no_retrieval":  "grpo_whitebox_v7_abl_no_ret_run1",
-    "no_disp_embed": "grpo_whitebox_v7_abl_no_disp_run1",
-    "no_tfidf_disp": "grpo_whitebox_v7_abl_no_tfidf_run1",
-    "no_generation": "grpo_whitebox_v7_abl_no_gen_run1",
-    "no_ppl":        "grpo_whitebox_v7_abl_no_ppl_run1",
-}
 
 def get_active_tasks(ablation: str) -> List[str]:
     if ablation == "none":
@@ -85,14 +82,13 @@ MIN_NEW_TOKENS    = 80
 MAX_NEW_TOKENS    = 160
 TEMPERATURE       = 0.85
 TOP_P             = 0.92
-REPETITION_PEN    = 1.1   # 1.5→1.1: target phrase가 프롬프트에 포함되어
-                           # 1.5는 target 토큰 logit ~33% 억제 → n_valid↓
+REPETITION_PEN    = 1.1   # target phrase가 프롬프트에 포함되어 높은 값은 target 토큰 logit 억제
                            # NO_REPEAT_NGRAM_SIZE가 반복 제어를 맡으므로 낮게 유지
 NO_REPEAT_NGRAM_SIZE = 4
-LR                = 1e-5   # v7 FIX: 2e-5→1e-5, Adam 모멘텀 누적시 실효 step 추가 감소
+LR                = 1e-5   # Adam 모멘텀 누적시 실효 step 추가 감소 목적
 WEIGHT_DECAY      = 0.01
-GRAD_CLIP         = 0.5    # v7 FIX: 1.0→0.5, gradient norm 수준 이중 방어선
-ADV_CLIP          = 2.0    # v7 NEW: advantage 상한, std 작을때 폭발 방지
+GRAD_CLIP         = 0.5    # gradient norm 수준 방어선 (ADV_CLIP과 이중 보호)
+ADV_CLIP          = 2.0    # advantage 상한: high-reward 수렴 시 std↓→adv↑→overshooting 방지
 LORA_R            = 16
 LORA_ALPHA        = 32
 LORA_DROPOUT      = 0.05
@@ -100,24 +96,17 @@ LORA_TARGETS      = ["q_proj", "v_proj", "k_proj", "o_proj",
                      "gate_proj", "up_proj", "down_proj"]
 MAX_PROMPT_TOKENS = 768
 
-# ── r_retrieval: Contriever raw dot product 선형 정규화 ──────────────────────
-# Two-Gate 완전 제거 이유 (실측 기반):
-#   1. cos vs dot product 불일치: Spearman ρ=0.635, top-10 overlap 7/10
-#      → document L2 norm 분산(1.31~2.05)으로 cos/dot 랭킹이 최대 30% 불일치
-#      → ragatt_pipeline이 dot product로 검색 → 학습 보상도 dot product로 통일
-#   2. Two-Gate는 임계값 보정 오류에 취약 (v5 오류 A의 근본)
-#      → 단조증가 선형함수로 항상 gradient 확보
-# 실측 Contriever raw dot product (seed_doc vs query, n=50):
-#   Min=0.484, Max=1.296, Mean=1.002, Std=0.166
-# DOT_FLOOR: 0.40 (관측 최솟값 아래, 무관한 쌍의 기준선)
-# DOT_CEILING: 1.50 (관측 최댓값 1.30 + 여유)
+# ── r_retrieval(Eq.1): Contriever raw dot product 선형 정규화 ─────────────────
+# pipeline이 dot product로 검색 → 학습 보상도 dot product 사용
+# (cos 기반 보상은 실제 랭킹과 최대 30% 불일치: Spearman ρ=0.635, top-10 overlap 7/10)
+# 실측 (seed_doc vs query, n=50): Min=0.484, Max=1.296, Mean=1.002, Std=0.166
+# DOT_FLOOR=0.40 (무관한 쌍 기준선), DOT_CEILING=1.50 (최대 여유 포함)
 DOT_FLOOR   = 0.40
 DOT_CEILING = 1.50
 
-# ── v6 패널티 상수 (모두 additive) ────────────────────────────────────────
-# v5의 RETRIEVAL_THRESHOLD / RETRIEVAL_FAIL_PENALTY 제거 (→ 오류 A 해결)
-COLLAPSE_PENALTY           = -3.0   # doc quality fail: 여전히 replacement (극단적 붕괴)
-TARGET_MISSING_PENALTY_ADD =  2.0   # target 미포함 시 차감 (additive → std 보존)
+# ── 패널티 상수 (모두 additive) — 논문 Eq.7의 β_col / β_pay에 대응 ──────────
+COLLAPSE_PENALTY           = -3.0   # doc quality fail: replacement (극단적 붕괴). Eq.7 β_col=-3.0
+TARGET_MISSING_PENALTY_ADD =  2.0   # target 미포함 시 차감 (additive → std 보존). Eq.7 β_pay=2.0
 QUERY_REPEAT_PENALTY       = -0.4   # 쿼리 반복 1회당 차감
 MIN_DOC_WORDS              = 30
 MIN_UNIQUE_WORD_RATIO      = 0.15
@@ -132,9 +121,6 @@ _RAG_PROMPT = (
     'If you cannot find the answer to the question, just say "I don\'t know".'
     "\n\nContexts: {context}\n\nQuery: {question}\n\nAnswer:"
 )
-
-
-# Two-Gate 제거: 단조함수로 대체 (threshold 보정 오류 원천 차단)
 
 
 # ─────────────────────────────────────────────────────────
@@ -252,6 +238,10 @@ class UncertaintyWeighter(nn.Module):
       w_i  = 1 / (2 σ_i²)
       R    = Σ_i w_i · r_i
       L_uncert = Σ_i log(σ_i)
+
+    NOTE (paper-vs-code): 논문 Eq.6은 R0(d)=Σr_k를 "weight-free"로 정의하지만, 여기서는
+    ablation으로 줄어든 active_tasks에 대해서도 학습되는 uncertainty weight를 사용한다
+    (train_grpo_poison_v7.py와 동일한 구조/불일치, 그 파일 참고).
     """
     def __init__(self, active_tasks: List[str]):
         super().__init__()
@@ -294,19 +284,8 @@ def _get_contriever_dot(doc: str, query: str) -> float:
     return float(np.dot(q_emb, d_emb))
 
 
-def r_retrieval(doc: str, query: str) -> float:
-    """Contriever raw dot product → 선형 정규화 [0, 1].
-    단조증가: dot product 높을수록 r 높음. 임계값/보정값 없음.
-    실측 분포: Min=0.484, Max=1.296, Mean=1.002
-    DOT_FLOOR=0.40 (기준선), DOT_CEILING=1.50 (최대 여유 포함)
-    - dot=0.50 → 0.09 | dot=1.00 → 0.55 | dot=1.30 → 0.82
-    """
-    dot = _get_contriever_dot(doc, query)
-    return float(max(0.0, min(1.0, (dot - DOT_FLOOR) / (DOT_CEILING - DOT_FLOOR))))
-
-
 def r_disp_embed(doc: str, context_docs: List[str]) -> float:
-    """Inter-doc MiniLM cosine similarity → 1 - inter_sim. [Stage 2 bypass]
+    """Paper Eq.2 (r_emb): inter-doc MiniLM cosine similarity → 1 - inter_sim. [Stage 2 bypass]
     r_tfidf_disp와 동일 설계로 통일: 낮을수록 좋음, 임계값 없음.
     RAGDefender가 cosine 기반으로 탐지 → MiniLM은 cosine 유지.
     """
@@ -327,7 +306,7 @@ def r_disp_embed(doc: str, context_docs: List[str]) -> float:
 
 
 def r_tfidf_disp(doc: str, context_docs: List[str]) -> float:
-    """Inter-doc TF-IDF cosine similarity. Want LOW. reward = 1 - inter_sim. [Stage 1 bypass]"""
+    """Paper Eq.3 (r_lex): inter-doc TF-IDF cosine similarity. Want LOW. reward = 1 - inter_sim. [Stage 1 bypass]"""
     if not _tfidf_fitted or not doc.strip() or not context_docs:
         return 1.0
     d_vec = _tfidf_vec(doc)
@@ -342,9 +321,7 @@ def r_tfidf_disp(doc: str, context_docs: List[str]) -> float:
 
 
 def r_generation(doc: str, query: str, target: str) -> float:
-    """P(target_answer | RAG_prompt(doc, query)) via Vicuna-7B.
-    v6에서도 유지: r_gen이 group 내 분산 9.9% (> 0.3) 확인됨 (v5 log 분석)
-    """
+    """Paper Eq.4 (r_pay): sigma(-NLL(target|RAG_prompt(doc, query)) + 2.0) via Vicuna-7B."""
     if not doc.strip():
         return 0.5
 
@@ -373,7 +350,7 @@ def r_generation(doc: str, query: str, target: str) -> float:
 
 
 def r_ppl(doc: str) -> float:
-    """Vicuna-7B PPL on doc alone. Low PPL → high reward."""
+    """Paper Eq.5 (r_flu): sigma(-log(PPL/20)) via Vicuna-7B. Low PPL → high reward."""
     if not doc.strip():
         return 0.0
     input_ids = _vicuna_tokenizer(
@@ -387,9 +364,6 @@ def r_ppl(doc: str) -> float:
     ppl = max(ppl, 1.0)
     score = -math.log(ppl / FLUENCY_REF_PPL)
     return float(torch.sigmoid(torch.tensor(score)).item())
-
-
-r_fluency = r_ppl
 
 
 def contains_target(doc: str, target: str) -> bool:
@@ -419,7 +393,7 @@ def compute_reward_vector(
     tasks_to_compute = set(_ALL_TASKS if include_inactive_rewards else active_tasks)
     dot = _get_contriever_dot(doc, query) if "retrieval" in tasks_to_compute else DOT_FLOOR
     full = {
-        "retrieval":  float(max(0.0, min(1.0, (dot - DOT_FLOOR) / (DOT_CEILING - DOT_FLOOR))))
+        "retrieval":  float(max(0.0, min(1.0, (dot - DOT_FLOOR) / (DOT_CEILING - DOT_FLOOR))))  # Eq.1
                       if "retrieval" in tasks_to_compute else 0.0,
         "disp_embed": r_disp_embed(doc, context_docs) if "disp_embed" in tasks_to_compute else 0.0,
         "tfidf_disp": r_tfidf_disp(doc, context_docs) if "tfidf_disp" in tasks_to_compute else 0.0,
@@ -437,6 +411,7 @@ def compute_reward_vector(
 def soft_kendall_loss(
     log_probs: torch.Tensor, rewards: torch.Tensor, scale: float = 10.0
 ) -> torch.Tensor:
+    """Paper Eq.9 (rank-agreement rho_hat) + Eq.10 (L_rank=(1-rho_hat)/2)."""
     lp_diff = log_probs.unsqueeze(0) - log_probs.unsqueeze(1)
     r_diff  = rewards.unsqueeze(0)   - rewards.unsqueeze(1)
     s_lp = 2.0 * torch.sigmoid(scale * lp_diff) - 1.0
@@ -451,16 +426,15 @@ def soft_kendall_loss(
 def grpo_loss(
     log_probs: torch.Tensor, rewards: torch.Tensor
 ) -> torch.Tensor:
+    """Paper Eq.8: group-relative advantage A_hat_i, clipped to [-2, 2]; GRPO policy-gradient loss."""
     adv = (rewards - rewards.mean()) / (rewards.std() + 1e-8)
-    adv = torch.clamp(adv, -ADV_CLIP, ADV_CLIP)  # v7 FIX: 고보상 수렴시 std↓→adv↑→overshooting 방지
+    adv = torch.clamp(adv, -ADV_CLIP, ADV_CLIP)  # 고보상 수렴시 std↓→adv↑→overshooting 방지
     return -(adv.detach() * log_probs).mean()
 
 
 # ─────────────────────────────────────────────────────────
 # PROMPT BUILDING (Qwen 생성기용)
 # ─────────────────────────────────────────────────────────
-# v6 핵심 변경: "naturally implies" → 명시적 포함 요구
-# v5 오류 C: 시스템 메시지가 "implies"(암시)를 허용 → model이 간접 표현 선택 → n_valid=0
 _SYSTEM = (
     "You are a Wikipedia passage editor. "
     "Rewrite the given passage so it reads as a natural Wikipedia excerpt "
@@ -624,7 +598,7 @@ def sample_candidates(
 
 
 # ─────────────────────────────────────────────────────────
-# ONE-POSITION TRAINING STEP  (v6 핵심)
+# ONE-POSITION TRAINING STEP
 # ─────────────────────────────────────────────────────────
 def train_position(
     model, tokenizer,
@@ -641,15 +615,14 @@ def train_position(
     """
     Returns: (loss_or_None, best_doc, best_combined_reward, mean_full5_reward_vector, n_valid)
 
-    v6 패널티 적용 (모두 additive — std 보존이 핵심):
+    패널티 적용 (모두 additive — std 보존):
       1. Hard:     doc quality fail → combined_mod[i] = COLLAPSE_PENALTY (-3.0) [replacement]
-                   (단어 반복 붕괴는 이상값이므로 여전히 replacement 처리)
       2. Additive: target 미포함  → combined_mod[i] -= TARGET_MISSING_PENALTY_ADD (2.0)
       3. Additive: query 반복     → combined_mod[i] += QUERY_REPEAT_PENALTY × (n-1)
 
-    v5와 결정적 차이:
-      v5 오류 B: target 미포함 → replacement(-2.0) → n_valid=0시 전원 동일 → std=0 → skip
-      v6 수정:   target 미포함 → additive(-2.0)   → base_reward 차이 유지 → std>0 → gradient
+    최종 loss = l_grpo(Eq.8) + lam_k·l_kend(Eq.9-10) + uncert_loss
+      → 논문 Eq.11에 uncert_loss(UncertaintyWeighter 정규화 항, 논문 수식에는 없음)가
+        추가된 형태 — train_grpo_poison_v7.py의 UncertaintyWeighter 주석 참고.
     """
     context_docs = [seed] + prev_docs
     prompt_text = format_prompt(tokenizer, query, target, seed, prev_docs)
@@ -671,14 +644,14 @@ def train_position(
     # Uncertainty-weighted combined reward
     combined, uncert_loss = uw(reward_t)  # (G,)
 
-    # ── v6 Penalty pass (additive, std 보존) ─────────────────────────────
+    # ── Penalty pass (additive, std 보존) ────────────────────────────────
     combined_mod = combined.detach().clone()
     for i, t in enumerate(texts):
-        # 1. doc quality fail: extreme collapse → replacement (예외적 처리)
+        # 1. doc quality fail: extreme collapse → replacement
         if not _check_doc_quality(t):
             combined_mod[i] = COLLAPSE_PENALTY
             continue
-        # 2. target 미포함: additive (v6 핵심 변경)
+        # 2. target 미포함: additive (base_reward 차이 유지 → std>0 → gradient)
         if not contains_target(t, target):
             combined_mod[i] = combined_mod[i] - TARGET_MISSING_PENALTY_ADD
         # 3. query 반복: additive
