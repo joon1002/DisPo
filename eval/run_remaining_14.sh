@@ -4,12 +4,12 @@ set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 source ../.venv/bin/activate
-export DISPO_DATA_ROOT=/data1/joonhyung
+export DISPO_DATA_ROOT=/path/to
 export HF_HUB_DISABLE_XET=1
 export CUDA_VISIBLE_DEVICES=0
 
 CACHE=clean_topn_cache/nq_merged_val100_top50/contriever_top50.pt
-LOGDIR=/data1/joonhyung/DisPo/logs
+LOGDIR=/path/to/DisPo/logs
 mkdir -p "$LOGDIR"
 
 run_one() {

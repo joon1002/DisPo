@@ -35,6 +35,7 @@ import gc
 import json
 import math
 import os
+import pickle
 import sys
 from collections import Counter
 from datetime import datetime
@@ -59,8 +60,8 @@ from src.prompts import wrap_prompt as legacy_wrap_prompt
 from src.prompts import wrap_prompt_llama as legacy_wrap_prompt_llama
 
 # 서버마다 대용량 데이터 저장 위치가 다를 수 있어 환경변수로 override 가능
-# (예: export DISPO_DATA_ROOT=/data_ssd/joonhyung)
-_DATA_ROOT = os.environ.get("DISPO_DATA_ROOT", "/data/joonhyung")
+# (예: export DISPO_DATA_ROOT=/path/to)
+_DATA_ROOT = os.environ.get("DISPO_DATA_ROOT", "/path/to")
 
 # ── Dataset 설정 ──────────────────────────────────────────────────────────────
 _DS_CFG = {
@@ -87,14 +88,20 @@ _DS_CFG = {
 }
 
 _RETRIEVAL_ALIAS = {
-    "contriever":         "facebook/contriever",
-    "contriever-msmarco": "facebook/contriever-msmarco",
-    "ance":               "sentence-transformers/msmarco-roberta-base-ance-firstp",
-    "dpr":                "sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base",
-    "bge-base":           "BAAI/bge-base-en-v1.5",
-    "e5-base":            "intfloat/e5-base-v2",
-    "gte-base":           "thenlper/gte-base",
-    "mpnet":              "sentence-transformers/all-mpnet-base-v2",
+    "contriever":           "facebook/contriever",
+    "contriever-msmarco":   "facebook/contriever-msmarco",
+    "ance":                 "sentence-transformers/msmarco-roberta-base-ance-firstp",
+    "dpr":                  "sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base",
+    "bge-base":             "BAAI/bge-base-en-v1.5",
+    "e5-base":              "intfloat/e5-base-v2",
+    "gte-base":             "thenlper/gte-base",
+    "mpnet":                "sentence-transformers/all-mpnet-base-v2",
+    # New retrievers
+    "multi-qa-minilm-dot":  "sentence-transformers/multi-qa-MiniLM-L6-dot-v1",
+    "bm25":                 "bm25",
+    "tas-b":                "sentence-transformers/msmarco-distilbert-base-tas-b",
+    "jina-small":           "jinaai/jina-embeddings-v2-small-en",
+    "nomic-v1.5":           "nomic-ai/nomic-embed-text-v1.5",
 }
 
 _DPR_QUESTION_ENCODER = "sentence-transformers/facebook-dpr-question_encoder-single-nq-base"
@@ -103,14 +110,45 @@ _DPR_CONTEXT_ENCODER  = "sentence-transformers/facebook-dpr-ctx_encoder-single-n
 # Contriever 계열: mean-pool + dot-product (비정규화)
 _CONTRIEVER_FAMILY = {"facebook/contriever", "facebook/contriever-msmarco"}
 
-# query / document prefix (E5, BGE 등)
+# 학습 시 dot-product(비정규화) 사용 → cosine 정규화 불필요
+_DOT_PRODUCT_MODELS = {
+    "sentence-transformers/multi-qa-MiniLM-L6-dot-v1",
+    "sentence-transformers/msmarco-distilbert-base-tas-b",
+}
+
+# query / document prefix (E5, BGE, Nomic 등)
 _QUERY_PREFIXES = {
-    "intfloat/e5-base-v2":   "query: ",
-    "BAAI/bge-base-en-v1.5": "Represent this sentence for searching relevant passages: ",
+    "intfloat/e5-base-v2":          "query: ",
+    "BAAI/bge-base-en-v1.5":        "Represent this sentence for searching relevant passages: ",
+    "nomic-ai/nomic-embed-text-v1.5": "search_query: ",
 }
 _DOC_PREFIXES = {
-    "intfloat/e5-base-v2":   "passage: ",
+    "intfloat/e5-base-v2":          "passage: ",
+    "nomic-ai/nomic-embed-text-v1.5": "search_document: ",
 }
+
+
+def _bm25_tokenize(text):
+    return text.lower().split()
+
+
+def _bm25_score_doc(bm25_params, query_tokens, doc_tokens):
+    """Score an out-of-corpus document against query tokens using saved BM25 params."""
+    idf = bm25_params["idf"]
+    k1 = bm25_params["k1"]
+    b = bm25_params["b"]
+    avgdl = bm25_params["avgdl"]
+    nd = len(doc_tokens)
+    score = 0.0
+    for term in query_tokens:
+        tf = doc_tokens.count(term)
+        if tf == 0:
+            continue
+        idf_val = idf.get(term, 0.0)
+        if idf_val <= 0.0:
+            continue
+        score += idf_val * tf * (k1 + 1) / (tf + k1 * (1 - b + b * nd / max(avgdl, 1)))
+    return score
 
 _DEFAULT_MODEL_CONFIG = str(_ROOT / "model_configs" / "vicuna7b_config.json")
 _VICUNA_MODEL = "lmsys/vicuna-7b-v1.3"
@@ -127,6 +165,9 @@ def load_json(path):
         return json.load(f)
 
 def top_similar_pairs(texts, model, top_k):
+    """RAGDefender Stage 2 (pairwise frequency-score filter, paper §2.3 / eval/README.md):
+    top-k 문서 쌍 중 코사인 유사도가 가장 높은 top_k쌍을 반환 — 이 쌍들의 빈도 누적으로
+    악성 클러스터 후보를 추정한다."""
     embs = model.encode(texts, convert_to_tensor=True)
     cos  = st_util.cos_sim(embs, embs)
     pairs = [(i, j, cos[i][j].item())
@@ -253,7 +294,8 @@ def load_clean_topn_cache(path, args, model_hf_name, log_fp):
 def retrieve_cached_topn_topk(query, adv_docs, clean_topn_cache, corpus_texts,
                               encode_fn, use_cosine, device, top_k,
                               q_prefix="", d_prefix="",
-                              query_encode_fn=None, doc_encode_fn=None):
+                              query_encode_fn=None, doc_encode_fn=None,
+                              bm25_scorer=None):
     """clean top-N cache와 adv_docs를 합쳐 top-k 검색."""
     query_encode_fn = query_encode_fn or encode_fn
     doc_encode_fn = doc_encode_fn or encode_fn
@@ -269,12 +311,20 @@ def retrieve_cached_topn_topk(query, adv_docs, clean_topn_cache, corpus_texts,
     q_text = q_prefix + query if q_prefix else query
     d_texts = [d_prefix + d if d_prefix else d for d in adv_docs]
 
-    adv_embs = doc_encode_fn(d_texts).to(device).half()
-    q_emb = query_encode_fn([q_text]).to(device).half()
-    if use_cosine:
-        adv_embs = F.normalize(adv_embs, dim=-1)
-        q_emb = F.normalize(q_emb, dim=-1)
-    adv_scores = torch.mm(adv_embs, q_emb.T).squeeze(1).float().cpu()
+    if bm25_scorer is not None:
+        # BM25: lexical scoring for adv docs
+        q_tokens = _bm25_tokenize(query)
+        adv_scores = torch.tensor(
+            [_bm25_score_doc(bm25_scorer, q_tokens, _bm25_tokenize(d)) for d in adv_docs],
+            dtype=torch.float32,
+        )
+    else:
+        adv_embs = doc_encode_fn(d_texts).to(device).half()
+        q_emb = query_encode_fn([q_text]).to(device).half()
+        if use_cosine:
+            adv_embs = F.normalize(adv_embs, dim=-1)
+            q_emb = F.normalize(q_emb, dim=-1)
+        adv_scores = torch.mm(adv_embs, q_emb.T).squeeze(1).float().cpu()
 
     all_scores = torch.cat([clean_scores, adv_scores], dim=0)
     top_local = all_scores.topk(top_k).indices.tolist()
@@ -300,6 +350,8 @@ def build_generator_prompt(model_name, question, docs):
 
 # ── RAGDefender ───────────────────────────────────────────────────────────────
 def find_num_adv_tfidf(text_list):
+    """RAGDefender Stage 1 TF-IDF veto (paper §2.3): top-5 TF-IDF 단어의 문서별 존재 여부로
+    다수결 투표해 악성 클러스터 크기 추정치를 보정한다."""
     stop_words = list(sktext.ENGLISH_STOP_WORDS)
     tfidf = sktext.TfidfVectorizer(stop_words=stop_words)
     X = tfidf.fit_transform(text_list)
@@ -312,6 +364,10 @@ def find_num_adv_tfidf(text_list):
     return sum(final)
 
 def find_num_adv_agg_with_stage1(text_list, s_model):
+    """RAGDefender Φ (paper §2.3, clustering-based defense): retrieved top-k 문서를
+    2-cluster로 나눈 뒤(Agglomerative), find_num_adv_tfidf의 TF-IDF veto로 어느 클러스터가
+    악성인지·크기를 얼마로 볼지 보정한다. NQ/MS MARCO 경로에서 사용 — HotpotQA는 별도의
+    concentration-based grouping(eval/hotpotqa_multihop_ragdef_v2_eval.py)을 사용한다."""
     if len(text_list) < 2:
         return 0, set()
     embeddings = s_model.encode(text_list, convert_to_tensor=True)
@@ -377,6 +433,10 @@ def main():
                    help="DPR query encoder: ctx=legacy context encoder, standard=question encoder")
     p.add_argument("--clean_topn_cache", type=str, default="",
                    help="미리 계산한 clean corpus top-N cache(.pt). 있으면 full corpus scoring 대신 cache+adv 재랭킹")
+    p.add_argument("--defense_model",   type=str, default="paraphrase-MiniLM-L6-v2",
+                   help="RAGDefender defense embedding model (SentenceTransformer ID)")
+    p.add_argument("--skip_nd",         action="store_true",
+                   help="ND(No-Defense) LLM 호출 생략 — RD-ASR만 측정할 때 속도 절반")
     p.add_argument("--embed_only",       action="store_true",
                    help="corpus 임베딩만 수행하고 eval 없이 종료")
     args = p.parse_args()
@@ -384,7 +444,8 @@ def main():
     model_hf_name = _RETRIEVAL_ALIAS[args.retrieval_model]
     is_contriever_family = model_hf_name in _CONTRIEVER_FAMILY
     is_standard_dpr = args.retrieval_model == "dpr" and args.dpr_query_encoder == "standard"
-    use_cosine = not is_contriever_family
+    is_bm25 = model_hf_name == "bm25"
+    use_cosine = not (is_contriever_family or model_hf_name in _DOT_PRODUCT_MODELS or is_bm25)
     if is_standard_dpr:
         use_cosine = False
     q_prefix = _QUERY_PREFIXES.get(model_hf_name, "")
@@ -411,6 +472,7 @@ def main():
             "device": device, "embed_batch": args.embed_batch,
             "use_cosine": use_cosine, "dpr_query_encoder": args.dpr_query_encoder,
             "clean_topn_cache": args.clean_topn_cache,
+            "defense_model": args.defense_model,
         })
 
         # ── Retriever 로딩 ────────────────────────────────────────────────────
@@ -448,6 +510,11 @@ def main():
 
             encode_fn = doc_encode_fn
             log(log_fp, f"[load] DPR standard 완료 → q={_DPR_QUESTION_ENCODER}, doc={_DPR_CONTEXT_ENCODER}, scorer=dot")
+        elif is_bm25:
+            encode_fn = None
+            query_encode_fn = None
+            doc_encode_fn = None
+            log(log_fp, "[load] BM25: lexical retriever (no embedding model)")
         else:
             st_model = SentenceTransformer(model_hf_name, trust_remote_code=True)
             st_model = st_model.to(device)
@@ -483,11 +550,19 @@ def main():
 
         clean_topn_cache = None
         corpus_embs_gpu = None
+        bm25_scorer = None
         if args.clean_topn_cache:
             if args.embed_only:
                 raise ValueError("--embed_only와 --clean_topn_cache는 같이 사용할 수 없습니다.")
             clean_topn_cache = load_clean_topn_cache(args.clean_topn_cache, args, model_hf_name, log_fp)
             log(log_fp, "[embed] clean top-N cache 사용 → corpus embedding GPU 전송 생략")
+            if is_bm25:
+                bm25_params_path = args.clean_topn_cache + ".bm25_params.pkl"
+                if not os.path.exists(bm25_params_path):
+                    raise FileNotFoundError(f"BM25 params not found: {bm25_params_path}")
+                with open(bm25_params_path, "rb") as _f:
+                    bm25_scorer = pickle.load(_f)
+                log(log_fp, f"[load] BM25 params loaded (vocab={len(bm25_scorer['idf']):,})")
         else:
             corpus_embs = build_or_load_corpus_embs(
                 corpus_texts, cache_path,
@@ -535,8 +610,8 @@ def main():
             log(log_fp, f"[load] HotpotQA q_to_beir_id: {len(q_to_beir_id):,}")
 
         # ── Defense model 로딩 ────────────────────────────────────────────────
-        log(log_fp, "[load] RAGDefender defense model (MiniLM)...")
-        defense_model = SentenceTransformer("paraphrase-MiniLM-L6-v2", trust_remote_code=True)
+        log(log_fp, f"[load] RAGDefender defense model ({args.defense_model})...")
+        defense_model = SentenceTransformer(args.defense_model, trust_remote_code=True)
         log(log_fp, "[load] defense model 완료")
 
         # ── Generator 로딩: legacy BEIR path와 동일하게 create_model 사용 ─────
@@ -614,6 +689,7 @@ def main():
                     d_prefix=d_prefix,
                     query_encode_fn=query_encode_fn,
                     doc_encode_fn=doc_encode_fn,
+                    bm25_scorer=bm25_scorer,
                 )
             else:
                 retrieved_docs, adv_positions, poison_in_topk = retrieve_fullcorpus_topk(
@@ -647,12 +723,15 @@ def main():
                 pass  # 아래에서 별도 추적
 
             # ② No-Defense
-            nd_prompt   = build_generator_prompt(args.model_name, question, [clean_str(d) for d in retrieved_docs])
-            nd_response = llm.query(nd_prompt)
-            nd_asr_sub  = (clean_str(incco_ans) in clean_str(nd_response)
-                           or clean_str(nd_response) in clean_str(incco_ans))
-            nd_accuracy = (clean_str(correct_ans) in clean_str(nd_response)
-                           or clean_str(nd_response) in clean_str(correct_ans))
+            if args.skip_nd:
+                nd_response = ""; nd_asr_sub = False; nd_accuracy = False
+            else:
+                nd_prompt   = build_generator_prompt(args.model_name, question, [clean_str(d) for d in retrieved_docs])
+                nd_response = llm.query(nd_prompt)
+                nd_asr_sub  = (clean_str(incco_ans) in clean_str(nd_response)
+                               or clean_str(nd_response) in clean_str(incco_ans))
+                nd_accuracy = (clean_str(correct_ans) in clean_str(nd_response)
+                               or clean_str(nd_response) in clean_str(correct_ans))
 
             # ③ RAGDefender Stage-1 + Stage-2
             n_adv, stage1_adv_idx = find_num_adv_agg_with_stage1(retrieved_docs, defense_model)
@@ -725,6 +804,8 @@ def main():
             "dataset": args.dataset,
             "corpus_size": n_corpus,
             "retrieval_mode": f"full_corpus_{args.retrieval_model}",
+            "run_label": args.run_label,
+            "defense_model": args.defense_model,
             "no_defense": {
                 "num_queries":      n,
                 "ASR":              round(nd_asr_cnt / n, 4),

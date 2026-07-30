@@ -39,19 +39,19 @@ from main_dispo_fullcorpus_ragdef import contriever_encode  # noqa: E402
 
 
 ATTACKS = {
-    "PoisonedRAG": "/data/joonhyung/DisPo/data/attackbaselines_pd/PoisonedRAG/hotpotqa/para_poisonedrag4_hotpot100.csv",
-    "Joint-GCG": "/data/joonhyung/DisPo/data/attackbaselines_pd/jointgcg/hotpotqa/para_hotpotqa_origin_jointgcg_v2_n4.csv",
-    "Confundo": "/data/joonhyung/DisPo/data/attackbaselines_pd/confundo/hotpotqa/para_confundo_hotpotqa_N4.csv",
-    "RAGParadox": "/data/joonhyung/DisPo/data/attackbaselines_pd/RAGParadox/hotpotqa/para_hotpotqa_ragparadox_n4.csv",
-    "DiPoison": "/data/joonhyung/DisPo/data/attackbaselines_pd/DiPoison/hotpotqa/para_dipoison4_hotpot100.csv",
+    "PoisonedRAG": "/path/to/DisPo/data/attackbaselines_pd/PoisonedRAG/hotpotqa/para_poisonedrag4_hotpot100.csv",
+    "Joint-GCG": "/path/to/DisPo/data/attackbaselines_pd/jointgcg/hotpotqa/para_hotpotqa_origin_jointgcg_v2_n4.csv",
+    "Confundo": "/path/to/DisPo/data/attackbaselines_pd/confundo/hotpotqa/para_confundo_hotpotqa_N4.csv",
+    "RAGParadox": "/path/to/DisPo/data/attackbaselines_pd/RAGParadox/hotpotqa/para_hotpotqa_ragparadox_n4.csv",
+    "DiPoison": "/path/to/DisPo/data/attackbaselines_pd/DiPoison/hotpotqa/para_dipoison4_hotpot100.csv",
 }
 
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--corpus_path", default="/data/joonhyung/datasets/hotpotqa/corpus.jsonl")
-    p.add_argument("--clean_topn_cache", default="/data/joonhyung/DisPo/eval/clean_topn_cache/hotpotqa_para_5attacks_top50/contriever_top50.pt")
-    p.add_argument("--output_dir", default="/data/joonhyung/DisPo/eval/results/hotpotqa_para_vicuna_multihop_ragdef")
+    p.add_argument("--corpus_path", default="/path/to/datasets/hotpotqa/corpus.jsonl")
+    p.add_argument("--clean_topn_cache", default="/path/to/DisPo/eval/clean_topn_cache/hotpotqa_para_5attacks_top50/contriever_top50.pt")
+    p.add_argument("--output_dir", default="/path/to/DisPo/eval/results/hotpotqa_para_vicuna_multihop_ragdef")
     p.add_argument("--defense_model", default="paraphrase-MiniLM-L6-v2")
     p.add_argument("--generator_model", default="lmsys/vicuna-7b-v1.3")
     p.add_argument("--gpu_id", type=int, default=0)

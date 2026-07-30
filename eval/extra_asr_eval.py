@@ -9,8 +9,8 @@ extra_asr_eval.py
 Usage:
   cd eval/
   HF_HUB_DISABLE_XET=1 PYTHONUNBUFFERED=1 CUDA_VISIBLE_DEVICES=0 \\
-    /data/joonhyung/nq/.venv/bin/python3 extra_asr_eval.py \\
-    --docs_csv /data/joonhyung/nq/results/grpo_whitebox_v7_1.5b_run1/pd_eval100_v7.csv \\
+    /path/to/nq/.venv/bin/python3 extra_asr_eval.py \\
+    --docs_csv /path/to/nq/results/grpo_whitebox_v7_1.5b_run1/pd_eval100_v7.csv \\
     --gpu_id 0
 """
 import argparse, gc, json, math, os, sys
@@ -30,7 +30,7 @@ _ROOT = Path(__file__).resolve().parent
 # ─── argparse ────────────────────────────────────────────────
 p = argparse.ArgumentParser()
 p.add_argument("--docs_csv",
-    default="/data/joonhyung/nq/results/grpo_whitebox_v7_1.5b_run1/pd_eval100_v7.csv")
+    default="/path/to/nq/results/grpo_whitebox_v7_1.5b_run1/pd_eval100_v7.csv")
 p.add_argument("--corpus",
     default="../data/corpus.jsonl")
 p.add_argument("--qrels_dir",
@@ -45,8 +45,8 @@ p.add_argument("--seed",       type=int, default=12)
 args = p.parse_args()
 
 DEVICE = f"cuda:{args.gpu_id}" if torch.cuda.is_available() else "cpu"
-os.environ["HF_HOME"] = "/data/joonhyung/home/.cache/huggingface"
-os.environ["TRANSFORMERS_CACHE"] = "/data/joonhyung/home/.cache/huggingface/hub"
+os.environ["HF_HOME"] = "/path/to/home/.cache/huggingface"
+os.environ["TRANSFORMERS_CACHE"] = "/path/to/home/.cache/huggingface/hub"
 
 import random
 random.seed(args.seed); np.random.seed(args.seed); torch.manual_seed(args.seed)

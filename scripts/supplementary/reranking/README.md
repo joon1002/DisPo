@@ -27,7 +27,7 @@ Equivalent explicit command:
 ```bash
 CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 python -m scripts.supplementary.reranking.eval_tinybert_l2_asr \
   --docs_csv data/generated/your_attack.csv \
-  --data_root /data/joonhyung \
+  --data_root /path/to \
   --adv_per_query 4 \
   --ret_top_n 20 \
   --top_k 5 \

@@ -2,16 +2,16 @@
 # Sequential fullcorpus RobustRAG eval for all attackbaselines_pd files
 # GPU 1, Contriever -> RobustRAG KeywordAgg -> Mistral-7B-Instruct-v0.3, top-5
 
-PYTHON=/data/joonhyung/ragdef/.venv/bin/python
-SCRIPT=/data/joonhyung/DisPo/eval/main_dispo_fullcorpus_robustrag.py
-BASE_DATA=/data/joonhyung/DisPo/data/attackbaselines_pd
-LOG_DIR=/data/joonhyung/DisPo/eval/logs_attackbaselines_robustrag_mistral7b
+PYTHON=/path/to/ragdef/.venv/bin/python
+SCRIPT=/path/to/DisPo/eval/main_dispo_fullcorpus_robustrag.py
+BASE_DATA=/path/to/DisPo/data/attackbaselines_pd
+LOG_DIR=/path/to/DisPo/eval/logs_attackbaselines_robustrag_mistral7b
 
 mkdir -p "$LOG_DIR"
 
 export CUDA_VISIBLE_DEVICES=1
 export HF_HUB_DISABLE_XET=1
-cd /data/joonhyung/DisPo
+cd /path/to/DisPo
 
 run_eval() {
     local csv_file="$1"
@@ -31,7 +31,7 @@ run_eval() {
         --gpu_id 1 >> "$log" 2>&1
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ===== DONE: $name =====" | tee -a "$LOG_DIR/main.log"
 
-    latest_run=$(ls -td /data/joonhyung/DisPo/eval/txt_logs_fullcorpus_nq/run_*/ 2>/dev/null | head -1)
+    latest_run=$(ls -td /path/to/DisPo/eval/txt_logs_fullcorpus_nq/run_*/ 2>/dev/null | head -1)
     if [ -f "${latest_run}final.json" ]; then
         echo "=== FINAL: $name ===" | tee -a "$LOG_DIR/main.log"
         cat "${latest_run}final.json" | tee -a "$LOG_DIR/main.log"

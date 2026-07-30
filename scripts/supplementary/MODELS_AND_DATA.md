@@ -50,10 +50,10 @@ python -m scripts.supplementary.robustrag.eval_mistral7b_asr \
 
 ## NQ data files
 
-By default, `--data_root /data/joonhyung` is expected. The scripts read:
+By default, `--data_root /path/to` is expected. The scripts read:
 
-- `/data/joonhyung/datasets/nq/corpus.jsonl`
-- `/data/joonhyung/datasets/nq/contriever_embs_fullcorpus.pt`
+- `/path/to/datasets/nq/corpus.jsonl`
+- `/path/to/datasets/nq/contriever_embs_fullcorpus.pt`
 
 Set `DISPO_DATA_ROOT` or pass `--data_root` if the other server stores them elsewhere:
 

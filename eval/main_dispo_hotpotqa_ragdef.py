@@ -5,7 +5,7 @@ HotpotQA full-corpus 평가는 main_dispo_fullcorpus_ragdef.py --dataset hotpotq
 main_dispo_hotpotqa_ragdef.py — HotpotQA BEIR corpus RAGDefender pipeline evaluation
 
 main_dispo_extraval_ragdef.py와 동일한 파이프라인.
-차이점: BEIR HotpotQA corpus(/data/joonhyung/datasets/hotpotqa/) 사용.
+차이점: BEIR HotpotQA corpus(/path/to/datasets/hotpotqa/) 사용.
   - corpus.jsonl: 5.2M Wikipedia passages
   - queries.jsonl: query text → BEIR _id 매핑
   - qrels (train+dev+test): query_id → relevant corpus_id
@@ -40,17 +40,17 @@ from sentence_transformers import SentenceTransformer, util as st_util
 from tqdm import tqdm
 
 _ROOT = Path(__file__).resolve().parent
-_HOTPOTQA_CORPUS_PATH  = "/data/joonhyung/datasets/hotpotqa/corpus.jsonl"
-_HOTPOTQA_QUERIES_PATH = "/data/joonhyung/datasets/hotpotqa/queries.jsonl"
+_HOTPOTQA_CORPUS_PATH  = "/path/to/datasets/hotpotqa/corpus.jsonl"
+_HOTPOTQA_QUERIES_PATH = "/path/to/datasets/hotpotqa/queries.jsonl"
 _HOTPOTQA_QRELS_PATHS  = [
-    "/data/joonhyung/datasets/hotpotqa/qrels/train.tsv",
-    "/data/joonhyung/datasets/hotpotqa/qrels/dev.tsv",
-    "/data/joonhyung/datasets/hotpotqa/qrels/test.tsv",
+    "/path/to/datasets/hotpotqa/qrels/train.tsv",
+    "/path/to/datasets/hotpotqa/qrels/dev.tsv",
+    "/path/to/datasets/hotpotqa/qrels/test.tsv",
 ]
 _VICUNA_MODEL  = "lmsys/vicuna-7b-v1.3"
-_MISTRAL_MODEL = "/data/seonhye/hf_home/hub/models--mistralai--Mistral-7B-Instruct-v0.3/snapshots/c170c708c41dac9275d15a8fff4eca08d52bab71"
-_LLAMA3_MODEL  = "/data/seonhye/hf_models/models--meta-llama--Meta-Llama-3-8B-Instruct/snapshots/8afb486c1db24fe5011ec46dfbe5b5dccdb575c2"
-_QWEN25_MODEL  = "/data/seonhye/hf_models/models--Qwen--Qwen2.5-7B-Instruct/snapshots/a09a35458c702b33eeacc393d103063234e8bc28"
+_MISTRAL_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
+_LLAMA3_MODEL  = "meta-llama/Meta-Llama-3-8B-Instruct"
+_QWEN25_MODEL  = "Qwen/Qwen2.5-7B-Instruct"
 
 
 # ── 유틸 ────────────────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ class _FastchatVicuna:
             from fastchat.model import load_model, get_conversation_template
             self._get_conv = get_conversation_template
         except ImportError:
-            raise ImportError("fastchat not installed. Use ragatt venv: /data/joonhyung/ragatt/.venv")
+            raise ImportError("fastchat not installed. Use ragatt venv: /path/to/ragatt/.venv")
         self._model, self._tok = load_model(
             model_path=_VICUNA_MODEL, device="cuda", num_gpus=1,
             max_gpu_memory=None, dtype=torch.float16,

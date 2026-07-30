@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DISPO_ROOT="${DISPO_ROOT:-/data/joonhyung/DisPo}"
-PY="${PY:-/data/joonhyung/ragdef/.venv/bin/python}"
+DISPO_ROOT="${DISPO_ROOT:-/path/to/DisPo}"
+PY="${PY:-/path/to/ragdef/.venv/bin/python}"
 DOCS_CSV="${DOCS_CSV:-$DISPO_ROOT/data/attackbaselines_pd/DiPoison/merged/msmarco_merged_dipoison.csv}"
-MSMARCO_CORPUS_PATH="${MSMARCO_CORPUS_PATH:-/data/byungchan/datasets/msmarco/corpus.jsonl}"
+MSMARCO_CORPUS_PATH="${MSMARCO_CORPUS_PATH:-/path/to/datasets/msmarco/corpus.jsonl}"
 EMBED_CACHE_DIR="${EMBED_CACHE_DIR:-$(dirname "$MSMARCO_CORPUS_PATH")}"
 CACHE_DIR="${CACHE_DIR:-$DISPO_ROOT/eval/clean_topn_cache/msmarco_merged_val100_top50}"
 OUT_JSON="${OUT_JSON:-$DISPO_ROOT/eval/results/msmarco_merged_8ret_fullcorpus/msmarco_merged_dipoison_summary.json}"

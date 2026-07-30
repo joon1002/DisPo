@@ -6,11 +6,11 @@ v7-abl final_model에서 nq100_validate 100개 쿼리에 대해 poison docs 생�
 --ablation 인자로 훈련 시 사용한 ablation 모드를 지정해야 함 (UW 로드 시 n_tasks 맞춤).
 
 Usage:
-  CUDA_VISIBLE_DEVICES=0 /data_ssd/joonhyung/DisPo/.venv/bin/python \\
-    /data_ssd/joonhyung/DisPo/scripts/infer_v7_abl_checkpoint.py \\
+  CUDA_VISIBLE_DEVICES=0 /path/to/DisPo/.venv/bin/python \\
+    /path/to/DisPo/scripts/infer_v7_abl_checkpoint.py \\
     --ablation no_disp_embed \\
-    --checkpoint /data_ssd/joonhyung/DisPo/data/final_model_abl_nodisp \\
-    --output    /data_ssd/joonhyung/DisPo/data/generated/pd_eval100_v7_abl_no_disp_g8_b4.csv \\
+    --checkpoint /path/to/DisPo/data/final_model_abl_nodisp \\
+    --output    /path/to/DisPo/data/generated/pd_eval100_v7_abl_no_disp_g8_b4.csv \\
     --gpu_id [gpu_id] --group_size 8 --gen_batch_size 4 --N 4
 """
 import argparse, json, os, re, sys

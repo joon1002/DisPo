@@ -9,15 +9,15 @@ PRR / ND-ASR / RD-ASR 측정.
 - RAGDefender singlehop (AgglomerativeClustering + TF-IDF Stage1 + freq-score Stage2)
 
 Usage:
-  cd /data/joonhyung/DisPo
-  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 /data/joonhyung/ragdef/.venv/bin/python \\
+  cd /path/to/DisPo
+  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 /path/to/ragdef/.venv/bin/python \\
     eval/multi_retriever_ragdef_eval.py \\
     --dataset nq \\
     --docs_csv data/generated/pd_eval100_merged_n7.csv \\
     --out_json eval/results/multi_retriever_ragdef/pd_eval100_merged_n7_summary.json
 
   # MSMARCO 서버에서는 --corpus_path/--cache_dir만 서버 경로에 맞게 지정
-  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 /data/joonhyung/ragdef/.venv/bin/python \\
+  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 /path/to/ragdef/.venv/bin/python \\
     eval/multi_retriever_ragdef_eval.py \\
     --dataset msmarco \\
     --corpus_path /path/to/msmarco/corpus.jsonl \\
@@ -50,8 +50,8 @@ from transformers import AutoTokenizer, AutoModel
 _ROOT = Path(__file__).resolve().parent
 
 _DEFAULT_CORPUS_PATHS = {
-    "nq": "/data/joonhyung/datasets/nq/corpus.jsonl",
-    "msmarco": "/data/byungchan/datasets/msmarco/corpus.jsonl",
+    "nq": "/path/to/datasets/nq/corpus.jsonl",
+    "msmarco": "/path/to/datasets/msmarco/corpus.jsonl",
 }
 _DEFAULT_CACHE_DIRS = {
     "nq": str(_ROOT / "clean_topn_cache/nq_merged_val100_top50"),

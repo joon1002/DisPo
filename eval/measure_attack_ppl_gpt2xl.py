@@ -14,11 +14,11 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 DEFAULT_ATTACKS = {
-    "poisonedRAG": "/data/joonhyung/nq/results/attackbaselines_pd/poisonedrag_nq100.csv",
-    "jointgcg": "/data/joonhyung/nq/results/attackbaselines_pd/jointgcg4_nq100.csv",
-    "ragparadox": "/data/joonhyung/nq/results/attackbaselines_pd/ragparadox_nq100_n4.csv",
-    "confundo": "/data/joonhyung/nq/results/attackbaselines_pd/confundo_500input_nq_N4_temp0.7_v2.csv",
-    "dispo_v7_cont_n4g8": "/data/joonhyung/DisPo/data/generated/pd_eval100_v7_cont_n4g8.csv",
+    "poisonedRAG": "/path/to/nq/results/attackbaselines_pd/poisonedrag_nq100.csv",
+    "jointgcg": "/path/to/nq/results/attackbaselines_pd/jointgcg4_nq100.csv",
+    "ragparadox": "/path/to/nq/results/attackbaselines_pd/ragparadox_nq100_n4.csv",
+    "confundo": "/path/to/nq/results/attackbaselines_pd/confundo_500input_nq_N4_temp0.7_v2.csv",
+    "dispo_v7_cont_n4g8": "/path/to/DisPo/data/generated/pd_eval100_v7_cont_n4g8.csv",
 }
 
 
@@ -28,7 +28,7 @@ def parse_args():
     p.add_argument("--gpu_id", type=int, default=1)
     p.add_argument("--batch_size", type=int, default=8)
     p.add_argument("--max_length", type=int, default=512)
-    p.add_argument("--output_dir", default="/data/joonhyung/DisPo/eval/ppl_gpt2xl_attacks")
+    p.add_argument("--output_dir", default="/path/to/DisPo/eval/ppl_gpt2xl_attacks")
     p.add_argument("--local_files_only", action="store_true")
     return p.parse_args()
 

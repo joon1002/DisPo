@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd /data/joonhyung/DisPo
+cd /path/to/DisPo
 
-PY=/data/joonhyung/ragdef/.venv/bin/python
+PY=/path/to/ragdef/.venv/bin/python
 EVAL=eval/hotpotqa_merged_multihop_8ret_eval.py
-DOCS=/data/joonhyung/DisPo/data/attackbaselines_pd/DiPoison/merged/hotpotqa_merged_dipoison.csv
-OUT=/data/joonhyung/DisPo/eval/results/hotpotqa_merged_multihop_8ret/hotpotqa_merged_dipoison_summary.json
-CACHE_LOG_DIR=/data/joonhyung/DisPo/eval/results/hotpotqa_merged_multihop_8ret/cache_logs
+DOCS=/path/to/DisPo/data/attackbaselines_pd/DiPoison/merged/hotpotqa_merged_dipoison.csv
+OUT=/path/to/DisPo/eval/results/hotpotqa_merged_multihop_8ret/hotpotqa_merged_dipoison_summary.json
+CACHE_LOG_DIR=/path/to/DisPo/eval/results/hotpotqa_merged_multihop_8ret/cache_logs
 
 mkdir -p "$CACHE_LOG_DIR"
 

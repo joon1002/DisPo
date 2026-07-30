@@ -7,7 +7,7 @@ Pipeline: Contriever full-corpus top-5 (NO adv docs injected) -> Vicuna-7B ->
 accuracy = any of the query's acceptable answers appears in the response.
 
 Usage:
-  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 DISPO_DATA_ROOT=/data1/joonhyung \
+  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 DISPO_DATA_ROOT=/path/to \
     PYTHONUNBUFFERED=1 python eval/clean_acc_fullcorpus300.py \
     --queries_csv data/generated/nq_clean_acc/clean_acc_queries300.csv \
     --gpu_id 0

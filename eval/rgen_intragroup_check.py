@@ -10,11 +10,11 @@ rgen_intragroup_check.py
 두 값이 낮으면 재훈련 정당화.
 
 Usage:
-  CUDA_VISIBLE_DEVICES=0 /data/joonhyung/nq/.venv/bin/python \
-    /data/joonhyung/DisPo/eval/rgen_intragroup_check.py
+  CUDA_VISIBLE_DEVICES=0 /path/to/nq/.venv/bin/python \
+    /path/to/DisPo/eval/rgen_intragroup_check.py
 """
 import sys, math
-sys.path.insert(0, "/data/joonhyung/nq/scripts")
+sys.path.insert(0, "/path/to/nq/scripts")
 
 import numpy as np
 import pandas as pd
@@ -27,8 +27,8 @@ from peft import PeftModel
 import train_grpo_poison_v7 as v7
 
 # ── 설정 ─────────────────────────────────────────────────────
-CKPT      = "/data/joonhyung/DisPo/results/grpo_v7_n2_q500_run1/final_model"
-INPUT_CSV = "/data/joonhyung/DisPo/data/nq_500_pd_7b.csv"
+CKPT      = "/path/to/DisPo/results/grpo_v7_n2_q500_run1/final_model"
+INPUT_CSV = "/path/to/DisPo/data/nq_500_pd_7b.csv"
 N_QUERIES = 20     # 몇 개 query를 샘플링할지
 G         = 8      # group size (훈련과 동일)
 DEVICE    = "cuda"

@@ -3,7 +3,7 @@ set -euo pipefail
 
 DOCS_CSV="${1:?Usage: $0 /path/to/malicious_docs.csv [gpu_id]}"
 GPU_ID="${2:-0}"
-DATA_ROOT="${DISPO_DATA_ROOT:-/data/joonhyung}"
+DATA_ROOT="${DISPO_DATA_ROOT:-/path/to}"
 
 cd "$(dirname "$0")/../../.."
 

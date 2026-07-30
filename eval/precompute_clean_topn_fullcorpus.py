@@ -115,8 +115,8 @@ def main():
         cfg = dict(fc._DS_CFG[args.dataset])
     else:
         cfg = {
-            "corpus_path": "/data/byungchan/datasets/msmarco/corpus.jsonl",
-            "embed_cache_dir": "/data/byungchan/datasets/msmarco",
+            "corpus_path": "/path/to/datasets/msmarco/corpus.jsonl",
+            "embed_cache_dir": "/path/to/datasets/msmarco",
         }
     if args.corpus_path:
         cfg["corpus_path"] = args.corpus_path

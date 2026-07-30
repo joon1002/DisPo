@@ -2,13 +2,13 @@
 set -uo pipefail
 
 GPU=0
-VENV=/data/joonhyung/ragatt/.venv/bin/python3
-EVAL=/data/joonhyung/DisPo/eval/main_dispo_fullcorpus_ragdef.py
-CACHE=/data/joonhyung/DisPo/eval/clean_topn_cache/nq_merged_val100_top50/contriever_top50.pt
-MODEL_CFG=/data/joonhyung/DisPo/eval/model_configs/vicuna7b_config.json
-BASE_DIR=/data/joonhyung/DisPo/data/attackbaselines_pd/RAGParadox
-LOGROOT=/data/joonhyung/DisPo/eval/txt_logs_fullcorpus_nq
-LOG=/data/joonhyung/DisPo/eval/txt_logs_fullcorpus_nq/run_ragparadox_n1to7_ablation.log
+VENV=/path/to/ragatt/.venv/bin/python3
+EVAL=/path/to/DisPo/eval/main_dispo_fullcorpus_ragdef.py
+CACHE=/path/to/DisPo/eval/clean_topn_cache/nq_merged_val100_top50/contriever_top50.pt
+MODEL_CFG=/path/to/DisPo/eval/model_configs/vicuna7b_config.json
+BASE_DIR=/path/to/DisPo/data/attackbaselines_pd/RAGParadox
+LOGROOT=/path/to/DisPo/eval/txt_logs_fullcorpus_nq
+LOG=/path/to/DisPo/eval/txt_logs_fullcorpus_nq/run_ragparadox_n1to7_ablation.log
 
 ts() { date '+[%Y-%m-%d %H:%M:%S]'; }
 
@@ -52,7 +52,7 @@ echo "$(ts) ===== all N=1..7 runs done, aggregating ====="
 "$VENV" - <<'PYEOF'
 import json, glob, os
 
-logroot = "/data/joonhyung/DisPo/eval/txt_logs_fullcorpus_nq"
+logroot = "/path/to/DisPo/eval/txt_logs_fullcorpus_nq"
 out = {}
 for n in range(1, 8):
     label = f"ragparadox_nablation_n{n}"
@@ -74,7 +74,7 @@ for n in range(1, 8):
         "rd_recall": rd["poison_recall_after"], "rd_f1": rd["poison_f1_after"],
         "retrieval_rate": nd["retrieval_rate"],
     }
-json.dump(out, open("/data/joonhyung/DisPo/eval/results_ragparadox_n1to7_ablation.json", "w"), indent=2)
+json.dump(out, open("/path/to/DisPo/eval/results_ragparadox_n1to7_ablation.json", "w"), indent=2)
 for n in range(1, 8):
     d = out[n]
     if "error" in d:

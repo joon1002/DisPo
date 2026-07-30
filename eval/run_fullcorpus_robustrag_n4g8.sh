@@ -2,13 +2,13 @@
 # Full-corpus RobustRAG eval: pd_eval100_v7_cont_n4g8.csv
 # Contriever -> RobustRAG KeywordAgg -> Vicuna-7B, top-5, GPU 0
 
-PYTHON=/data/joonhyung/ragdef/.venv/bin/python
-SCRIPT=/data/joonhyung/DisPo/eval/main_dispo_fullcorpus_robustrag.py
+PYTHON=/path/to/ragdef/.venv/bin/python
+SCRIPT=/path/to/DisPo/eval/main_dispo_fullcorpus_robustrag.py
 
 export CUDA_VISIBLE_DEVICES=0
 export HF_HUB_DISABLE_XET=1
 
-cd /data/joonhyung/DisPo
+cd /path/to/DisPo
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] ===== START: fullcorpus RobustRAG n4g8 ====="
 $PYTHON $SCRIPT \

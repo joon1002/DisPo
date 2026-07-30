@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PY=/data/joonhyung/nq/.venv/bin/python
-EVAL=/data/joonhyung/DisPo/eval/main_fullcorpus_ppl_filter.py
-PRECOMP=/data/joonhyung/DisPo/eval/precompute_clean_topn_fullcorpus.py
-CFG=/data/joonhyung/DisPo/eval/model_configs/vicuna7b_config.json
-CACHE=/data/joonhyung/DisPo/eval/clean_topn_cache/hotpotqa_5attacks_top50/contriever_top50.pt
+PY=/path/to/nq/.venv/bin/python
+EVAL=/path/to/DisPo/eval/main_fullcorpus_ppl_filter.py
+PRECOMP=/path/to/DisPo/eval/precompute_clean_topn_fullcorpus.py
+CFG=/path/to/DisPo/eval/model_configs/vicuna7b_config.json
+CACHE=/path/to/DisPo/eval/clean_topn_cache/hotpotqa_5attacks_top50/contriever_top50.pt
 
-POISONEDRAG=/data/joonhyung/DisPo/data/attackbaselines_pd/PoisonedRAG/hotpotqa/poisonedrag4_hotpot100.csv
-JOINTGCG=/data/joonhyung/DisPo/data/attackbaselines_pd/jointgcg/hotpotqa/hotpotqa_origin_jointgcg_v2_n4.csv
-CONFUNDO=/data/joonhyung/DisPo/data/attackbaselines_pd/confundo/hotpotqa/confundo_hotpotqa_N4.normalized_for_ppl.csv
-RAGPARADOX=/data/joonhyung/DisPo/data/attackbaselines_pd/RAGParadox/hotpotqa/hotpotqa_ragparadox_n4.csv
-DIPOISON=/data/joonhyung/DisPo/data/attackbaselines_pd/DiPoison/hotpotqa/dipoison4_hotpot100.csv
+POISONEDRAG=/path/to/DisPo/data/attackbaselines_pd/PoisonedRAG/hotpotqa/poisonedrag4_hotpot100.csv
+JOINTGCG=/path/to/DisPo/data/attackbaselines_pd/jointgcg/hotpotqa/hotpotqa_origin_jointgcg_v2_n4.csv
+CONFUNDO=/path/to/DisPo/data/attackbaselines_pd/confundo/hotpotqa/confundo_hotpotqa_N4.normalized_for_ppl.csv
+RAGPARADOX=/path/to/DisPo/data/attackbaselines_pd/RAGParadox/hotpotqa/hotpotqa_ragparadox_n4.csv
+DIPOISON=/path/to/DisPo/data/attackbaselines_pd/DiPoison/hotpotqa/dipoison4_hotpot100.csv
 
 export HF_HUB_DISABLE_XET=1
 export HF_HUB_OFFLINE=1

@@ -24,10 +24,10 @@ from itertools import combinations
 
 # ─── argparse (서버별 경로 오버라이드) ──────────────────────────
 _p = argparse.ArgumentParser()
-_p.add_argument("--docs_csv",    default="/data/joonhyung/nq/results/grpo_whitebox_v7_1.5b_run1/pd_eval100_v7.csv")
-_p.add_argument("--corpus",      default="/data/joonhyung/datasets/nq/corpus.jsonl")
-_p.add_argument("--qrels_dir",   default="/data/joonhyung/datasets/nq/qrels")
-_p.add_argument("--answers_json",default="/data/joonhyung/ragdef/RAGDefender/artifacts/results/target_queries/nq.json")
+_p.add_argument("--docs_csv",    default="/path/to/nq/results/grpo_whitebox_v7_1.5b_run1/pd_eval100_v7.csv")
+_p.add_argument("--corpus",      default="/path/to/datasets/nq/corpus.jsonl")
+_p.add_argument("--qrels_dir",   default="/path/to/datasets/nq/qrels")
+_p.add_argument("--answers_json",default="/path/to/ragdef/RAGDefender/artifacts/results/target_queries/nq.json")
 _p.add_argument("--reranker",    default="cross-encoder/ms-marco-MiniLM-L-6-v2",
                 help="HuggingFace cross-encoder model ID")
 _p.add_argument("--top_k",       type=int, default=5)

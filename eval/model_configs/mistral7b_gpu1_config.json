@@ -1,7 +1,7 @@
 {
     "model_info": {
         "provider": "hfchat",
-        "name": "/data/seonhye/hf_models/models--mistralai--Mistral-7B-Instruct-v0.3/snapshots/c170c708c41dac9275d15a8fff4eca08d52bab71"
+        "name": "mistralai/Mistral-7B-Instruct-v0.3"
     },
     "api_key_info": {
         "api_keys": [0],

@@ -11,7 +11,7 @@ in the same process/run, so the delta isolates the injection effect rather
 than cross-run generation stochasticity.
 
 Usage:
-  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 DISPO_DATA_ROOT=/data1/joonhyung \
+  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 DISPO_DATA_ROOT=/path/to \
     PYTHONUNBUFFERED=1 python eval/collateral_damage_eval.py \
     --victim_queries_csv data/generated/nq_clean_acc/clean_acc100.csv \
     --poison_docs_csv data/attackbaselines_pd/DiPoison/dipoison4_nq100.csv \

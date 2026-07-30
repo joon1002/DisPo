@@ -50,7 +50,7 @@ from src.models import create_model
 from src.prompts import wrap_prompt as legacy_wrap_prompt
 from src.prompts import wrap_prompt_llama as legacy_wrap_prompt_llama
 
-_DATA_ROOT = os.environ.get("DISPO_DATA_ROOT", "/data/joonhyung")
+_DATA_ROOT = os.environ.get("DISPO_DATA_ROOT", "/path/to")
 
 _DS_CFG = {
     "nq": {

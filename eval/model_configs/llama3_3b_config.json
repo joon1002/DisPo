@@ -1,7 +1,7 @@
 {
     "model_info": {
         "provider": "hfchat",
-        "name": "/data/seonhye/hf_models/models--meta-llama--Llama-3.2-3B-Instruct/snapshots/0cb88a4f764b7a12671c53f0838cd831a0843b95"
+        "name": "meta-llama/Llama-3.2-3B-Instruct"
     },
     "api_key_info": {
         "api_keys": [0],

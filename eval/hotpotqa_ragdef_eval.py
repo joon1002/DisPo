@@ -41,8 +41,8 @@ from sentence_transformers import SentenceTransformer, util as st_util
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
 
-_CORPUS_PATH   = "/data/joonhyung/datasets/hotpotqa/corpus.jsonl"
-_EMB_CACHE     = "/data/joonhyung/datasets/hotpotqa/contriever_embs_fullcorpus.pt"
+_CORPUS_PATH   = "/path/to/datasets/hotpotqa/corpus.jsonl"
+_EMB_CACHE     = "/path/to/datasets/hotpotqa/contriever_embs_fullcorpus.pt"
 _VICUNA_MODEL  = "lmsys/vicuna-7b-v1.3"
 _CONTRIEVER_HF = "facebook/contriever"
 
@@ -159,12 +159,12 @@ def ragdefender(docs, defense_model):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--queries_csv", type=str,
-                        default="/data/joonhyung/DisPo/data/generated/hotpotqa/poisonedrag4_hotpot100.csv")
+                        default="/path/to/DisPo/data/generated/hotpotqa/poisonedrag4_hotpot100.csv")
     parser.add_argument("--gpu_id",      type=int, default=0)
     parser.add_argument("--top_k",       type=int, default=5)
     parser.add_argument("--defense_model", type=str, default="paraphrase-MiniLM-L6-v2")
     parser.add_argument("--out_dir",     type=str,
-                        default="/data/joonhyung/DisPo/eval/results/hotpotqa_ragdef_poisonedrag")
+                        default="/path/to/DisPo/eval/results/hotpotqa_ragdef_poisonedrag")
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -260,7 +260,7 @@ def main():
     try:
         from fastchat.model import load_model, get_conversation_template
     except ImportError:
-        raise ImportError("fastchat 없음. /data/joonhyung/ragatt/.venv 사용")
+        raise ImportError("fastchat 없음. /path/to/ragatt/.venv 사용")
 
     llm_model, llm_tok = load_model(
         model_path=_VICUNA_MODEL, device="cuda", num_gpus=1,

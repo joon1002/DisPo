@@ -11,7 +11,7 @@ Usage:
     python gen_asr_eval.py \\
     --docs_csv  ../data/generated/pd_eval100v3.csv \\
     --input_csv ../data/nq100_validate_v3.csv \\
-    --generator /data/seonhye/hf_models/models--mistralai--Mistral-7B-Instruct-v0.3/snapshots/c170c708c41dac9275d15a8fff4eca08d52bab71 \\
+    --generator mistralai/Mistral-7B-Instruct-v0.3 \\
     --gpu_id 0
 """
 import argparse, gc, json, math, os
