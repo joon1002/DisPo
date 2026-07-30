@@ -1,4 +1,22 @@
 #!/usr/bin/env python3
+"""
+main_fullcorpus_ppl_filter.py — Full-corpus retrieval + GPT-2 XL PPL filter + generator ASR
+
+Supported datasets (--dataset): nq, hotpotqa, msmarco.
+msmarco은 _DS_CFG에 없어 --corpus_path로 corpus.jsonl 위치를 직접 지정하거나
+기본 경로($DISPO_DATA_ROOT/datasets/msmarco/corpus.jsonl)를 사용한다.
+
+Usage (msmarco, ASR-only 요약):
+  CUDA_VISIBLE_DEVICES=0 python eval/main_fullcorpus_ppl_filter.py \\
+    --dataset msmarco --retrieval_model contriever \\
+    --docs_csv data/attackbaselines_pd/DiPoison/merged/msmarco_merged_dipoison.csv \\
+    --adv_per_query 7 --top_k 5 \\
+    --thresholds 20 50 80 110 140 \\
+    --clean_topn_cache eval/clean_topn_cache/msmarco_merged_val100_top50/contriever_top50.pt \\
+    --model_config_path eval/model_configs/vicuna7b_config.json --model_name vicuna \\
+    --skip_baseline --asr_only --gpu_id 0
+"""
+
 import argparse
 import gc
 import json
@@ -20,6 +38,7 @@ if str(_ROOT) not in sys.path:
 
 from main_dispo_fullcorpus_ragdef import (  # noqa: E402
     _CONTRIEVER_FAMILY,
+    _DATA_ROOT,
     _DEFAULT_MODEL_CONFIG,
     _DS_CFG,
     _RETRIEVAL_ALIAS,
@@ -33,6 +52,15 @@ from main_dispo_fullcorpus_ragdef import (  # noqa: E402
     setup_logger,
 )
 from src.models import create_model  # noqa: E402
+
+# msmarco는 _DS_CFG(BEIR qrels 기반 nq/hotpotqa)에 없음 — precompute_clean_topn_fullcorpus.py와
+# 동일한 fallback 방식으로 corpus_path/log_subdir만 별도 지정
+_EXTRA_DS_CFG = {
+    "msmarco": {
+        "corpus_path": f"{_DATA_ROOT}/datasets/msmarco/corpus.jsonl",
+        "log_subdir": "txt_logs_fullcorpus_msmarco",
+    },
+}
 
 
 class TransformersVicuna:
@@ -89,12 +117,16 @@ class TransformersVicuna:
 
 def parse_args():
     p = argparse.ArgumentParser(description="Full-corpus retrieval + GPT-2 XL PPL filter + generator ASR")
-    p.add_argument("--dataset", type=str, default="nq", choices=["nq", "hotpotqa"])
+    p.add_argument("--dataset", type=str, default="nq", choices=["nq", "hotpotqa", "msmarco"])
+    p.add_argument("--corpus_path", type=str, default="",
+                   help="corpus.jsonl 경로 직접 지정 (미지정 시 dataset 기본 경로 사용, msmarco에 주로 필요)")
     p.add_argument("--retrieval_model", type=str, default="contriever", choices=["contriever"])
     p.add_argument("--docs_csv", type=str, required=True)
     p.add_argument("--top_k", type=int, default=5)
     p.add_argument("--adv_per_query", type=int, default=7)
-    p.add_argument("--thresholds", type=float, nargs="+", default=[20, 50, 80, 110, 130])
+    p.add_argument("--thresholds", type=float, nargs="+", default=[20, 50, 80, 110, 140])
+    p.add_argument("--asr_only", action="store_true",
+                   help="PPL 필터 적용 후 threshold별 ASR만 최종 요약/로그에 남김 (accuracy/retrieval 통계 생략)")
     p.add_argument("--ppl_model_name", type=str, default="gpt2-xl")
     p.add_argument("--ppl_batch_size", type=int, default=16)
     p.add_argument("--ppl_max_length", type=int, default=512)
@@ -160,7 +192,9 @@ def score_ppl_texts(model, tokenizer, texts, device, max_length, batch_size):
 
 def main():
     args = parse_args()
-    cfg = _DS_CFG[args.dataset]
+    cfg = dict(_DS_CFG[args.dataset]) if args.dataset in _DS_CFG else dict(_EXTRA_DS_CFG[args.dataset])
+    if args.corpus_path:
+        cfg["corpus_path"] = args.corpus_path
     model_hf_name = _RETRIEVAL_ALIAS[args.retrieval_model]
     is_contriever_family = model_hf_name in _CONTRIEVER_FAMILY
     if not is_contriever_family:
@@ -395,7 +429,10 @@ def main():
             "top_k": args.top_k,
             "adv_per_query": args.adv_per_query,
             "num_queries": n,
-            "retrieval": {
+            "ppl_filter": {},
+        }
+        if not args.asr_only:
+            final["retrieval"] = {
                 "queries_with_poison_rate": round(retrieval_totals["queries_with_poison"] / n, 4) if n else 0.0,
                 "poison_recall_topk": round(
                     retrieval_totals["poison_in_topk"] / retrieval_totals["poison_injected"], 4
@@ -406,32 +443,36 @@ def main():
                 "poison_in_topk": retrieval_totals["poison_in_topk"],
                 "poison_injected": retrieval_totals["poison_injected"],
                 "retrieved_docs": retrieval_totals["retrieved_docs"],
-            },
-            "baseline_no_filter": {
+            }
+            final["baseline_no_filter"] = {
                 "ASR": round(baseline["asr"] / n, 4) if n and not args.skip_baseline else None,
                 "Accuracy": round(baseline["acc"] / n, 4) if n and not args.skip_baseline else None,
-            },
-            "ppl_filter": {},
-        }
+            }
         for t in thresholds:
             c = counters[t]
             key = str(int(t) if t.is_integer() else t)
-            final["ppl_filter"][key] = {
-                "threshold": t,
-                "ASR": round(c["asr"] / n, 4) if n else 0.0,
-                "Accuracy": round(c["acc"] / n, 4) if n else 0.0,
-                "avg_survivors": round(c["total_survivors"] / n, 4) if n else 0.0,
-                "removed_docs": c["total_removed"],
-                "removed_docs_rate": round(c["total_removed"] / retrieval_totals["retrieved_docs"], 4)
-                if retrieval_totals["retrieved_docs"] else 0.0,
-                "poison_survived": c["poison_survived"],
-                "poison_removed": c["poison_removed"],
-                "clean_removed": c["clean_removed"],
-                "poison_recall_after": round(c["poison_survived"] / retrieval_totals["poison_injected"], 4)
-                if retrieval_totals["poison_injected"] else 0.0,
-                "poison_precision_after": round(c["poison_survived"] / c["total_survivors"], 4)
-                if c["total_survivors"] else 0.0,
-            }
+            if args.asr_only:
+                final["ppl_filter"][key] = {
+                    "threshold": t,
+                    "ASR": round(c["asr"] / n, 4) if n else 0.0,
+                }
+            else:
+                final["ppl_filter"][key] = {
+                    "threshold": t,
+                    "ASR": round(c["asr"] / n, 4) if n else 0.0,
+                    "Accuracy": round(c["acc"] / n, 4) if n else 0.0,
+                    "avg_survivors": round(c["total_survivors"] / n, 4) if n else 0.0,
+                    "removed_docs": c["total_removed"],
+                    "removed_docs_rate": round(c["total_removed"] / retrieval_totals["retrieved_docs"], 4)
+                    if retrieval_totals["retrieved_docs"] else 0.0,
+                    "poison_survived": c["poison_survived"],
+                    "poison_removed": c["poison_removed"],
+                    "clean_removed": c["clean_removed"],
+                    "poison_recall_after": round(c["poison_survived"] / retrieval_totals["poison_injected"], 4)
+                    if retrieval_totals["poison_injected"] else 0.0,
+                    "poison_precision_after": round(c["poison_survived"] / c["total_survivors"], 4)
+                    if c["total_survivors"] else 0.0,
+                }
 
         ts = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         csv_path = os.path.join(run_dir, f"results_{label}_{ts}.csv")
@@ -447,15 +488,18 @@ def main():
 
         log(log_fp, f"\n{'=' * 60}")
         log(log_fp, f"[PPL filter eval] N={n} top_k={args.top_k} adv={args.adv_per_query}")
-        if not args.skip_baseline:
+        if not args.skip_baseline and not args.asr_only:
             log(log_fp, f"baseline no-filter ASR={baseline['asr'] / n:.2%} acc={baseline['acc'] / n:.2%}")
         for key, v in final["ppl_filter"].items():
-            log(
-                log_fp,
-                f"thr={key:>5} ASR={v['ASR'] * 100:5.1f}% "
-                f"acc={v['Accuracy'] * 100:5.1f}% avg_docs={v['avg_survivors']:.2f} "
-                f"removed={v['removed_docs']} poison_survived={v['poison_survived']}"
-            )
+            if args.asr_only:
+                log(log_fp, f"thr={key:>5} ASR={v['ASR'] * 100:5.1f}%")
+            else:
+                log(
+                    log_fp,
+                    f"thr={key:>5} ASR={v['ASR'] * 100:5.1f}% "
+                    f"acc={v['Accuracy'] * 100:5.1f}% avg_docs={v['avg_survivors']:.2f} "
+                    f"removed={v['removed_docs']} poison_survived={v['poison_survived']}"
+                )
         log(log_fp, f"[save] {csv_path}")
         log(log_fp, f"[save] {summary_path}")
         log(log_fp, f"[save] {json_path}")
