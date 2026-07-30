@@ -3,16 +3,18 @@
 main_fullcorpus_ppl_filter.py — Full-corpus retrieval + GPT-2 XL PPL filter + generator ASR
 
 Supported datasets (--dataset): nq, hotpotqa, msmarco.
-msmarco은 _DS_CFG에 없어 --corpus_path로 corpus.jsonl 위치를 직접 지정하거나
-기본 경로($DISPO_DATA_ROOT/datasets/msmarco/corpus.jsonl)를 사용한다.
+msmarco은 _DS_CFG(nq/hotpotqa용, 로컬 경로 하드코딩)에 없음 — corpus가 다른 서버에
+있을 수 있으므로 로컬 기본 경로를 가정하지 않고 --corpus_path로 항상 명시적으로 받는다
+(미지정 시 에러).
 
 Usage (msmarco, ASR-only 요약):
   CUDA_VISIBLE_DEVICES=0 python eval/main_fullcorpus_ppl_filter.py \\
     --dataset msmarco --retrieval_model contriever \\
-    --docs_csv data/attackbaselines_pd/DiPoison/merged/msmarco_merged_dipoison.csv \\
+    --corpus_path /path/to/msmarco/corpus.jsonl \\
+    --docs_csv /path/to/attack_docs.csv \\
     --adv_per_query 7 --top_k 5 \\
     --thresholds 20 50 80 110 140 \\
-    --clean_topn_cache eval/clean_topn_cache/msmarco_merged_val100_top50/contriever_top50.pt \\
+    --clean_topn_cache /path/to/msmarco_clean_topn_cache/contriever_top50.pt \\
     --model_config_path eval/model_configs/vicuna7b_config.json --model_name vicuna \\
     --skip_baseline --asr_only --gpu_id 0
 """
@@ -38,7 +40,6 @@ if str(_ROOT) not in sys.path:
 
 from main_dispo_fullcorpus_ragdef import (  # noqa: E402
     _CONTRIEVER_FAMILY,
-    _DATA_ROOT,
     _DEFAULT_MODEL_CONFIG,
     _DS_CFG,
     _RETRIEVAL_ALIAS,
@@ -53,11 +54,11 @@ from main_dispo_fullcorpus_ragdef import (  # noqa: E402
 )
 from src.models import create_model  # noqa: E402
 
-# msmarco는 _DS_CFG(BEIR qrels 기반 nq/hotpotqa)에 없음 — precompute_clean_topn_fullcorpus.py와
-# 동일한 fallback 방식으로 corpus_path/log_subdir만 별도 지정
+# msmarco는 _DS_CFG(nq/hotpotqa, 로컬 경로 하드코딩)에 없음 — corpus가 다른 서버에 있을 수
+# 있으므로 로컬 기본 경로를 가정하지 않는다. --corpus_path로 항상 명시적으로 받는다.
 _EXTRA_DS_CFG = {
     "msmarco": {
-        "corpus_path": f"{_DATA_ROOT}/datasets/msmarco/corpus.jsonl",
+        "corpus_path": None,
         "log_subdir": "txt_logs_fullcorpus_msmarco",
     },
 }
@@ -119,7 +120,8 @@ def parse_args():
     p = argparse.ArgumentParser(description="Full-corpus retrieval + GPT-2 XL PPL filter + generator ASR")
     p.add_argument("--dataset", type=str, default="nq", choices=["nq", "hotpotqa", "msmarco"])
     p.add_argument("--corpus_path", type=str, default="",
-                   help="corpus.jsonl 경로 직접 지정 (미지정 시 dataset 기본 경로 사용, msmarco에 주로 필요)")
+                   help="corpus.jsonl 경로. nq/hotpotqa는 미지정 시 로컬 기본 경로 사용, "
+                        "msmarco는 로컬 기본 경로가 없어 필수 (다른 서버의 corpus 경로를 직접 지정)")
     p.add_argument("--retrieval_model", type=str, default="contriever", choices=["contriever"])
     p.add_argument("--docs_csv", type=str, required=True)
     p.add_argument("--top_k", type=int, default=5)
@@ -195,6 +197,11 @@ def main():
     cfg = dict(_DS_CFG[args.dataset]) if args.dataset in _DS_CFG else dict(_EXTRA_DS_CFG[args.dataset])
     if args.corpus_path:
         cfg["corpus_path"] = args.corpus_path
+    if not cfg.get("corpus_path"):
+        raise ValueError(
+            f"--corpus_path is required for --dataset {args.dataset} "
+            "(no local default configured for this dataset)"
+        )
     model_hf_name = _RETRIEVAL_ALIAS[args.retrieval_model]
     is_contriever_family = model_hf_name in _CONTRIEVER_FAMILY
     if not is_contriever_family:
