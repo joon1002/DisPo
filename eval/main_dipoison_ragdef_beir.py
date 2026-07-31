@@ -1,20 +1,20 @@
 """
-[LEGACY] 쿼리당 소수 후보 문서(4~124개)끼리만 경쟁시키는 방식입니다.
-기본 성능평가는 main_dipoison_fullcorpus_ragdef.py(full-corpus 검색)를 사용하세요.
-이 스크립트는 8검색기 비교 등 특수 목적에만 사용합니다.
+[LEGACY] Pits only a handful of candidate documents (4-124) against each other per query.
+For the default evaluation, use main_dipoison_fullcorpus_ragdef.py (full-corpus retrieval) instead.
+This script is only used for special purposes such as the 8-retriever comparison.
 
 main_dipoison_ragdef_beir.py — RAGDefender pipeline evaluation
 
 Data:
-  poison : pd_eval100_cont_n4g8.csv  (DiPoison whitebox 공격 문서)
-  normal : BEIR NQ corpus               (같은 title 전체 passage, 4~124개/쿼리)
+  poison : pd_eval100_cont_n4g8.csv  (DiPoison whitebox attack documents)
+  normal : BEIR NQ corpus               (all passages sharing the same title, 4-124 per query)
 
 Pipeline per query:
   1. Candidate pool: poison_docs(N) + all_beir_normal_docs
   2. Retriever top-k (contriever / e5-base / bge-base / ance / mpnet / contriever-msmarco)
-     - ST 모델: normalize_embeddings=True + cosine similarity (올바른 방식)
-     - Contriever: mean pooling + dot product (원본 설계)
-  3. No-Defense (ND)  : LLM on retrieved docs → ASR_sub 측정
+     - ST models: normalize_embeddings=True + cosine similarity (the correct approach)
+     - Contriever: mean pooling + dot product (original design)
+  3. No-Defense (ND)  : LLM on retrieved docs -> ASR_sub is measured
   4. RAGDefender S1+2 : TF-IDF clustering → freq-score filter → LLM on survivors
 
 Supported generators (via model_configs/):
@@ -114,10 +114,10 @@ _RETRIEVAL_ALIAS = {
     "mpnet":              "sentence-transformers/all-mpnet-base-v2",
 }
 
-# 모델 family 별 SentenceTransformer 사용 여부
+# Whether each model family uses SentenceTransformer
 _ST_FAMILIES = ("sentence-transformers/", "BAAI/", "intfloat/")
 
-# query / document prefix (E5, BGE 등)
+# query / document prefix (E5, BGE, etc.)
 _QUERY_PREFIXES = {
     "intfloat/e5-base-v2":   "query: ",
     "BAAI/bge-base-en-v1.5": "Represent this sentence for searching relevant passages: ",
@@ -126,7 +126,7 @@ _DOC_PREFIXES = {
     "intfloat/e5-base-v2":   "passage: ",
 }
 
-# 런타임에 로딩 후 설정
+# Set after loading at runtime
 _RET_Q_PREFIX: str = ""
 _RET_D_PREFIX: str = ""
 
@@ -171,7 +171,7 @@ def _mean_pool(token_embs, attention_mask):
 
 
 def contriever_encode(texts, model, tokenizer, device, batch_size=32):
-    """Contriever 공식 인코딩: mean pooling + 비정규화 → dot product용."""
+    """Official Contriever encoding: mean pooling + unnormalized, for dot product."""
     if isinstance(texts, str):
         texts = [texts]
     all_embs = []
@@ -196,7 +196,7 @@ def retrieve_topk(query, candidate_docs, r_model, top_k):
         q_emb  = embs[len(candidate_docs):]
         scores = torch.mm(d_embs, q_emb.T).squeeze(1).tolist()
     else:
-        # SentenceTransformer cosine (ANCE, BGE, E5, MPNet 등)
+        # SentenceTransformer cosine (ANCE, BGE, E5, MPNet, etc.)
         q_text = _RET_Q_PREFIX + query if _RET_Q_PREFIX else query
         d_texts = [_RET_D_PREFIX + d if _RET_D_PREFIX else d for d in candidate_docs]
         q_emb  = r_model.encode(q_text, convert_to_tensor=True, normalize_embeddings=True)
@@ -296,8 +296,8 @@ def parse_args():
     p.add_argument("--defense_model",     type=str, default=CONFIG["defense_model_name"],
                    help="SentenceTransformer model for RAGDefender Stage1+2")
     p.add_argument("--input_csv",         type=str, default=None,
-                   help="원본 validate CSV (beir_title 컬럼). v2~v4 쿼리 normal docs 조회용. "
-                        "nq.json 및 train500 폴백에도 없는 쿼리에 사용.")
+                   help="Original validate CSV (beir_title column). Used to look up normal docs for v2~v4 queries. "
+                        "Applies to queries missing from both nq.json and the train500 fallback.")
     return p.parse_args()
 
 
@@ -346,7 +346,7 @@ def main():
         log_json_block(log_fp, "RUN_CONFIG", effective_cfg)
 
         # ── Load models ──────────────────────────────────────────────────────
-        log(log_fp, "\n[load] 모델 로딩 시작...")
+        log(log_fp, "\n[load] Starting model loading...")
 
         defense_model = SentenceTransformer(args.defense_model, trust_remote_code=True)
         log(log_fp, f"[load] defense model  : {args.defense_model}")
@@ -375,22 +375,22 @@ def main():
         gc.collect(); torch.cuda.empty_cache()
 
         # ── Load BEIR corpus ─────────────────────────────────────────────────
-        log(log_fp, "\n[load] BEIR NQ corpus 로딩...")
+        log(log_fp, "\n[load] Loading BEIR NQ corpus...")
         corpus, _bq, qrels = load_beir_datasets_md(CONFIG["eval_dataset"], CONFIG["beir_split"])
         log(log_fp, f"[load] corpus size: {len(corpus)}")
 
         # pre-build title → [texts] index
-        log(log_fp, "[load] title index 구축 중...")
+        log(log_fp, "[load] Building title index...")
         title_to_texts: dict[str, list[str]] = {}
         for pid, doc in corpus.items():
             t = doc.get("title", "")
             title_to_texts.setdefault(t, []).append(doc["text"])
-        log(log_fp, f"[load] 고유 제목 수: {len(title_to_texts)}")
+        log(log_fp, f"[load] Unique titles: {len(title_to_texts)}")
 
         # query text → BEIR query id
         ia = load_json(args.answers_json)
         q_to_beir_id = {x["question"].strip(): x["id"] for x in ia}
-        log(log_fp, f"[load] query-to-id 매핑: {len(q_to_beir_id)} entries")
+        log(log_fp, f"[load] query-to-id mapping: {len(q_to_beir_id)} entries")
 
         def get_normal_docs(query_id):
             gt_ids = list(qrels[query_id].keys())
@@ -405,8 +405,8 @@ def main():
         docs_df = pd.read_csv(args.docs_csv)
         log(log_fp, f"[load] CSV rows: {len(docs_df)}")
 
-        # beir_title 폴백 매핑 구축 (train500 + input_csv)
-        # nq.json에 없는 쿼리는 beir_title로 corpus에서 normal docs 조회
+        # Build the beir_title fallback mapping (train500 + input_csv)
+        # Queries missing from nq.json look up normal docs from the corpus via beir_title
         _q_to_title_lower = {}
         _aux_path = os.path.join(os.path.dirname(__file__), "../data/nq_train_validate/nq_500_pd_7b.csv")
         if os.path.exists(_aux_path):
@@ -423,8 +423,8 @@ def main():
                     str(r["query"]).strip(): str(r["beir_title"]).strip().lower()
                     for _, r in _inp.iterrows()
                 })
-                log(log_fp, f"[load] input_csv beir_title 폴백: {args.input_csv} ({len(_inp)}개 추가)")
-        # corpus title 소문자 → 원본 매핑
+                log(log_fp, f"[load] input_csv beir_title fallback: {args.input_csv} ({len(_inp)} added)")
+        # corpus title lowercase -> original mapping
         _lower_to_orig = {k.lower(): k for k in title_to_texts.keys()}
 
         rows_data = []
@@ -453,9 +453,9 @@ def main():
                 "normal_docs": normal_docs,
             })
 
-        log(log_fp, f"[load] 유효 쿼리: {len(rows_data)}")
+        log(log_fp, f"[load] Valid queries: {len(rows_data)}")
         normal_sizes = [len(r["normal_docs"]) for r in rows_data]
-        log(log_fp, f"[load] 정상문서 수 — min={min(normal_sizes)} max={max(normal_sizes)} mean={sum(normal_sizes)/len(normal_sizes):.1f}")
+        log(log_fp, f"[load] Normal-document count — min={min(normal_sizes)} max={max(normal_sizes)} mean={sum(normal_sizes)/len(normal_sizes):.1f}")
 
         # ── Main loop ────────────────────────────────────────────────────────
         csv_rows = []
