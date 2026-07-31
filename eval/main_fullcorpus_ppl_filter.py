@@ -3,11 +3,11 @@
 main_fullcorpus_ppl_filter.py — Full-corpus retrieval + GPT-2 XL PPL filter + generator ASR
 
 Supported datasets (--dataset): nq, hotpotqa, msmarco.
-msmarco은 _DS_CFG(nq/hotpotqa용, 로컬 경로 하드코딩)에 없음 — corpus가 다른 서버에
-있을 수 있으므로 로컬 기본 경로를 가정하지 않고 --corpus_path로 항상 명시적으로 받는다
-(미지정 시 에러).
+msmarco is not in _DS_CFG (which hardcodes local paths for nq/hotpotqa) — since the corpus
+may live on a different server, no local default is assumed and --corpus_path is always
+required explicitly (errors if not given).
 
-Usage (msmarco, ASR-only 요약):
+Usage (msmarco, ASR-only summary):
   CUDA_VISIBLE_DEVICES=0 python eval/main_fullcorpus_ppl_filter.py \\
     --dataset msmarco --retrieval_model contriever \\
     --corpus_path /path/to/msmarco/corpus.jsonl \\
@@ -54,8 +54,8 @@ from main_dipoison_fullcorpus_ragdef import (  # noqa: E402
 )
 from src.models import create_model  # noqa: E402
 
-# msmarco는 _DS_CFG(nq/hotpotqa, 로컬 경로 하드코딩)에 없음 — corpus가 다른 서버에 있을 수
-# 있으므로 로컬 기본 경로를 가정하지 않는다. --corpus_path로 항상 명시적으로 받는다.
+# msmarco is not in _DS_CFG (which hardcodes local paths for nq/hotpotqa) — since the corpus
+# may live on a different server, no local default is assumed. --corpus_path is always required explicitly.
 _EXTRA_DS_CFG = {
     "msmarco": {
         "corpus_path": None,
@@ -120,15 +120,15 @@ def parse_args():
     p = argparse.ArgumentParser(description="Full-corpus retrieval + GPT-2 XL PPL filter + generator ASR")
     p.add_argument("--dataset", type=str, default="nq", choices=["nq", "hotpotqa", "msmarco"])
     p.add_argument("--corpus_path", type=str, default="",
-                   help="corpus.jsonl 경로. nq/hotpotqa는 미지정 시 로컬 기본 경로 사용, "
-                        "msmarco는 로컬 기본 경로가 없어 필수 (다른 서버의 corpus 경로를 직접 지정)")
+                   help="corpus.jsonl path. nq/hotpotqa use a local default if unset; "
+                        "msmarco has no local default and requires this (point it at the corpus on the other server)")
     p.add_argument("--retrieval_model", type=str, default="contriever", choices=["contriever"])
     p.add_argument("--docs_csv", type=str, required=True)
     p.add_argument("--top_k", type=int, default=5)
     p.add_argument("--adv_per_query", type=int, default=7)
     p.add_argument("--thresholds", type=float, nargs="+", default=[20, 50, 80, 110, 140])
     p.add_argument("--asr_only", action="store_true",
-                   help="PPL 필터 적용 후 threshold별 ASR만 최종 요약/로그에 남김 (accuracy/retrieval 통계 생략)")
+                   help="Keep only per-threshold ASR in the final summary/log after applying the PPL filter (omits accuracy/retrieval stats)")
     p.add_argument("--ppl_model_name", type=str, default="gpt2-xl")
     p.add_argument("--ppl_batch_size", type=int, default=16)
     p.add_argument("--ppl_max_length", type=int, default=512)
