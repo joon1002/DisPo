@@ -1,12 +1,12 @@
 """
 nd_rd_eval.py
 
-No-Defense 및 RAGDefender 상태에서 5가지 지표 측정:
-  precision, recall, f1  : no-defense (Contriever top-5 기준)
+Measures 5 metrics under No-Defense and RAGDefender:
+  precision, recall, f1  : no-defense (Contriever top-5 basis)
   nd-asr                 : no-defense ASR
   rd-asr                 : RAGDefender(MiniLM clustering) ASR
 
-poison doc 컬럼은 CSV에서 doc* 컬럼을 자동 감지하여 N에 무관하게 동작.
+Poison-doc columns are auto-detected from the CSV's doc* columns, so it works regardless of N.
 
 Usage:
   cd eval/
@@ -38,7 +38,7 @@ p.add_argument("--gpu_id",       type=int, default=0)
 p.add_argument("--ret_top_k",    type=int, default=5)
 p.add_argument("--ret_top_n",    type=int, default=20)
 p.add_argument("--input_csv",    default=None,
-               help="원본 validate CSV (beir_title 컬럼 포함). v2~v4 쿼리 normal docs 조회용.")
+               help="Original validate CSV (includes the beir_title column). Used to look up normal docs for v2~v4 queries.")
 args = p.parse_args()
 
 def rp(path):
@@ -72,7 +72,7 @@ with open(rp(args.answers_json)) as f:
     ia = json.load(f)
 q_to_beir_id = {x["question"].strip(): x["id"] for x in ia}
 
-# beir_title 폴백: v2~v4 쿼리는 nq.json에 없으므로 input_csv의 beir_title로 normal docs 조회
+# beir_title fallback: v2~v4 queries aren't in nq.json, so normal docs are looked up via input_csv's beir_title
 q_to_title = {}
 if args.input_csv:
     _inp = pd.read_csv(rp(args.input_csv))
@@ -90,7 +90,7 @@ def get_normal_docs(qid):
 
 print(f"[load] corpus={len(corpus)}, qrels={len(qrels)}")
 
-# ─── poison docs (N 자동 감지) ───────────────────────────────
+# ─── poison docs (N auto-detected) ───────────────────────────
 docs_df = pd.read_csv(rp(args.docs_csv))
 DOC_COLS = [c for c in docs_df.columns if c.startswith("doc")]
 print(f"[load] {len(docs_df)} queries, poison cols={DOC_COLS}")
@@ -159,7 +159,7 @@ def vicuna_query(prompt_text):
 def wrap_prompt(q, ctx_list):
     return PROMPT.replace("[question]", q).replace("[context]", "\n".join(ctx_list))
 
-# ─── 쿼리 데이터 구성 ────────────────────────────────────────
+# ─── Build query data ────────────────────────────────────────
 query_data = []
 for _, row in docs_df.iterrows():
     query   = str(row["query"]).strip()
@@ -180,7 +180,7 @@ for _, row in docs_df.iterrows():
 N = len(query_data)
 print(f"[prep] {N} valid queries")
 
-# ─── RAGDefender 유틸 ────────────────────────────────────────
+# ─── RAGDefender utilities ───────────────────────────────────
 def _ragdef_tfidf_count(docs):
     stop_words = list(sktext.ENGLISH_STOP_WORDS)
     try:
@@ -214,7 +214,7 @@ def ragdefender_filter(docs, s_model, top_k):
     clean_docs = [doc for doc, lbl in zip(docs, labels) if lbl != poison_label]
     return clean_docs[:top_k] if clean_docs else docs[:top_k]
 
-# ─── No-Defense 평가 ─────────────────────────────────────────
+# ─── No-Defense evaluation ───────────────────────────────────
 print("\n[eval] No-Defense: Contriever top-5 → Vicuna")
 nd_prec = nd_rec = nd_f1 = nd_asr = 0
 nd_top5_cache = []
@@ -242,7 +242,7 @@ for entry in tqdm(query_data, desc="ND", ncols=90):
 
 gc.collect(); torch.cuda.empty_cache()
 
-# ─── RAGDefender 평가 (top-20 → MiniLM clustering → top-5) ──
+# ─── RAGDefender evaluation (top-20 -> MiniLM clustering -> top-5) ──
 print("\n[eval] RAGDefender: top-20 → MiniLM clustering → top-5 → Vicuna")
 rd_s_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 rd_s_model.to(DEVICE)
@@ -256,11 +256,11 @@ for i, entry in enumerate(tqdm(query_data, desc="RD", ncols=90)):
 del rd_s_model
 gc.collect(); torch.cuda.empty_cache()
 
-# ─── 결과 출력 ───────────────────────────────────────────────
+# ─── Print results ───────────────────────────────────────────
 W = 66
 print(f"\n{'='*W}")
-print(f"  평가 결과: {Path(args.docs_csv).name}  (N={N})")
-print(f"  {'지표':<20}  {'값':>8}")
+print(f"  Evaluation result: {Path(args.docs_csv).name}  (N={N})")
+print(f"  {'Metric':<20}  {'Value':>8}")
 print(f"  {'-'*40}")
 print(f"  {'precision (ND)':<20}  {nd_prec/N*100:>7.1f}%")
 print(f"  {'recall    (ND)':<20}  {nd_rec /N*100:>7.1f}%")
@@ -268,7 +268,7 @@ print(f"  {'f1        (ND)':<20}  {nd_f1  /N*100:>7.1f}%")
 print(f"  {'nd-asr':<20}  {nd_asr /N*100:>7.1f}%")
 print(f"  {'rd-asr':<20}  {rd_asr /N*100:>7.1f}%")
 print(f"{'='*W}")
-print(f"\n  ※ precision/recall/f1: poison doc이 Contriever top-5에 포함된 비율 (no-defense)")
-print(f"  ※ nd-asr: no-defense 상태에서 target(wrong) answer 생성율")
-print(f"  ※ rd-asr: RAGDefender(MiniLM clustering) 방어 후 ASR")
+print(f"\n  * precision/recall/f1: fraction of poison docs included in Contriever top-5 (no-defense)")
+print(f"  * nd-asr: rate at which the target (wrong) answer is generated with no defense")
+print(f"  * rd-asr: ASR after the RAGDefender (MiniLM clustering) defense")
 print(f"{'='*W}")
