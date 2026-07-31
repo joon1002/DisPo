@@ -1,0 +1,19 @@
+# PyTorch (CUDA 12.1 build) — install first, separately, so pip resolves the
+# correct wheel index:
+#   pip install torch==2.4.1 torchvision --index-url https://download.pytorch.org/whl/cu121
+transformers==4.46.3
+sentence-transformers==3.2.1
+peft
+accelerate
+scikit-learn
+scipy
+numpy
+pandas
+tqdm
+matplotlib
+nltk
+beir
+fschat==0.2.36
+
+# Optional, only needed for scripts/paraphrase_q.py (query paraphrasing via the Gemini API):
+# google-genai

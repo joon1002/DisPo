@@ -334,7 +334,7 @@ def retrieve_cached_topn_topk(query, adv_docs, clean_topn_cache, corpus_texts,
 
 # ── Generator prompt ──────────────────────────────────────────────────────────
 def build_generator_prompt(model_name, question, docs):
-    """Use the same prompt construction as main_dipoison_ragdef_beir.py."""
+    """Model-specific RAG prompt wrapping (Llama uses its own chat template)."""
     if "llama" in str(model_name).lower():
         return legacy_wrap_prompt_llama(question, docs, 4)
     return legacy_wrap_prompt(question, docs, 4)
