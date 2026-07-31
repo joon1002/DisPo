@@ -4,15 +4,16 @@ main_dipoison_fullcorpus_ragdef.py — Full-corpus retrieval + RAGDefender eval
 PoisonedRAG 논문 기준: 전체 corpus (NQ 2.6M / HotpotQA 5.2M) 에 adv docs 주입 후
 retriever로 전체 코퍼스에서 top-k 검색 → RAGDefender 2-stage → Vicuna-7B → ASR 측정.
 
-Supported retrievers (--retrieval_model):
+Supported retrievers (--retrieval_model) — the 8 retrievers evaluated in the paper
+(Table 3, Supplementary Table 10/11):
   contriever         facebook/contriever              (dot-product, mean-pool)
   contriever-msmarco facebook/contriever-msmarco      (dot-product, mean-pool)
-  dpr                legacy DPR: context encoder for both query and docs by default
+  e5-base            intfloat/e5-base-v2
   ance               sentence-transformers/msmarco-roberta-base-ance-firstp
   bge-base           BAAI/bge-base-en-v1.5
-  e5-base            intfloat/e5-base-v2
-  gte-base           thenlper/gte-base
   mpnet              sentence-transformers/all-mpnet-base-v2
+  bm25               lexical (BM25)
+  nomic-v1.5         nomic-ai/nomic-embed-text-v1.5
 
 Usage (NQ):
   CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 python eval/main_dipoison_fullcorpus_ragdef.py \\
@@ -91,23 +92,14 @@ _RETRIEVAL_ALIAS = {
     "contriever":           "facebook/contriever",
     "contriever-msmarco":   "facebook/contriever-msmarco",
     "ance":                 "sentence-transformers/msmarco-roberta-base-ance-firstp",
-    "dpr":                  "sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base",
     "bge-base":             "BAAI/bge-base-en-v1.5",
     "e5-base":              "intfloat/e5-base-v2",
-    "gte-base":             "thenlper/gte-base",
     "mpnet":                "sentence-transformers/all-mpnet-base-v2",
-    # New retrievers
-    "multi-qa-minilm-dot":  "sentence-transformers/multi-qa-MiniLM-L6-dot-v1",
     "bm25":                 "bm25",
-    "tas-b":                "sentence-transformers/msmarco-distilbert-base-tas-b",
-    "jina-small":           "jinaai/jina-embeddings-v2-small-en",
     "nomic-v1.5":           "nomic-ai/nomic-embed-text-v1.5",
 }
 
-_DPR_QUESTION_ENCODER = "sentence-transformers/facebook-dpr-question_encoder-single-nq-base"
-_DPR_CONTEXT_ENCODER  = "sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base"
-
-# RAGDefender defense embedding space (Table 1 / Supp Table 5: matched=minilm, unseen=나머지)
+# RAGDefender defense embedding space (Table 1 / Supp Table 5: matched=minilm, unseen=the rest)
 _DEFENSE_MODEL_ALIASES = {
     "minilm": "paraphrase-MiniLM-L6-v2",
     "mpnet":  "sentence-transformers/all-mpnet-base-v2",
@@ -120,11 +112,6 @@ _DEFENSE_MODEL_ALIASES = {
 _CONTRIEVER_FAMILY = {"facebook/contriever", "facebook/contriever-msmarco"}
 
 # 학습 시 dot-product(비정규화) 사용 → cosine 정규화 불필요
-_DOT_PRODUCT_MODELS = {
-    "sentence-transformers/multi-qa-MiniLM-L6-dot-v1",
-    "sentence-transformers/msmarco-distilbert-base-tas-b",
-}
-
 # query / document prefix (E5, BGE, Nomic 등)
 _QUERY_PREFIXES = {
     "intfloat/e5-base-v2":          "query: ",
@@ -282,12 +269,6 @@ def load_clean_topn_cache(path, args, model_hf_name, log_fp):
         )
     if meta.get("model_hf") != model_hf_name:
         raise ValueError(f"clean_topn_cache model mismatch: {meta.get('model_hf')} != {model_hf_name}")
-    if args.retrieval_model == "dpr":
-        cache_mode = meta.get("dpr_query_encoder", "ctx")
-        if cache_mode != args.dpr_query_encoder:
-            raise ValueError(
-                f"clean_topn_cache DPR mode mismatch: {cache_mode} != {args.dpr_query_encoder}"
-            )
     if int(meta.get("top_n", 0)) < args.top_k:
         raise ValueError(f"clean_topn_cache top_n={meta.get('top_n')} < top_k={args.top_k}")
 
@@ -446,9 +427,6 @@ def main():
     p.add_argument("--seed",             type=int, default=12)
     p.add_argument("--embed_batch",      type=int, default=512)
     p.add_argument("--run_label",        type=str, default="")
-    p.add_argument("--dpr_query_encoder", type=str, default="ctx",
-                   choices=["standard", "ctx"],
-                   help="DPR query encoder: ctx=legacy context encoder, standard=question encoder")
     p.add_argument("--clean_topn_cache", type=str, default="",
                    help="미리 계산한 clean corpus top-N cache(.pt). 있으면 full corpus scoring 대신 cache+adv 재랭킹")
     p.add_argument("--defense_model",   type=str, default="minilm",
@@ -463,11 +441,8 @@ def main():
 
     model_hf_name = _RETRIEVAL_ALIAS[args.retrieval_model]
     is_contriever_family = model_hf_name in _CONTRIEVER_FAMILY
-    is_standard_dpr = args.retrieval_model == "dpr" and args.dpr_query_encoder == "standard"
     is_bm25 = model_hf_name == "bm25"
-    use_cosine = not (is_contriever_family or model_hf_name in _DOT_PRODUCT_MODELS or is_bm25)
-    if is_standard_dpr:
-        use_cosine = False
+    use_cosine = not (is_contriever_family or is_bm25)
     q_prefix = _QUERY_PREFIXES.get(model_hf_name, "")
     d_prefix = _DOC_PREFIXES.get(model_hf_name, "")
 
@@ -513,7 +488,7 @@ def main():
             "top_k": args.top_k, "adv_per_query": args.adv_per_query,
             "model_config_path": args.model_config_path, "model_name": args.model_name,
             "device": device, "embed_batch": args.embed_batch,
-            "use_cosine": use_cosine, "dpr_query_encoder": args.dpr_query_encoder,
+            "use_cosine": use_cosine,
             "clean_topn_cache": args.clean_topn_cache,
             "defense_model": args.defense_model,
         })
@@ -532,27 +507,6 @@ def main():
             query_encode_fn = encode_fn
             doc_encode_fn = encode_fn
             log(log_fp, f"[load] Contriever-family 완료 → {device}")
-        elif is_standard_dpr:
-            ctx_model = SentenceTransformer(_DPR_CONTEXT_ENCODER, trust_remote_code=True).to(device)
-            q_model = SentenceTransformer(_DPR_QUESTION_ENCODER, trust_remote_code=True).to(device)
-            ctx_model.eval()
-            q_model.eval()
-
-            def _st_encode(model, texts):
-                with torch.no_grad():
-                    return model.encode(
-                        texts, batch_size=256, convert_to_tensor=True,
-                        normalize_embeddings=False, show_progress_bar=False,
-                    ).cpu()
-
-            def doc_encode_fn(texts):
-                return _st_encode(ctx_model, texts)
-
-            def query_encode_fn(texts):
-                return _st_encode(q_model, texts)
-
-            encode_fn = doc_encode_fn
-            log(log_fp, f"[load] DPR standard 완료 → q={_DPR_QUESTION_ENCODER}, doc={_DPR_CONTEXT_ENCODER}, scorer=dot")
         elif is_bm25:
             encode_fn = None
             query_encode_fn = None
