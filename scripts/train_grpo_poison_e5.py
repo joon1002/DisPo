@@ -42,7 +42,7 @@ from sentence_transformers import SentenceTransformer
 # ─────────────────────────────────────────────────────────
 # CONSTANTS / DEFAULTS
 # ─────────────────────────────────────────────────────────
-DEFAULT_INPUT     = "data/nq_500_pd_7b.csv"
+DEFAULT_INPUT     = "data/nq_train_validate/nq_500_pd_7b.csv"
 DEFAULT_OUTPUT    = "results/grpo_e5_run1"
 GENERATOR_MODEL   = "Qwen/Qwen2.5-1.5B-Instruct"
 RETRIEVAL_MODEL   = "intfloat/e5-base-v2"

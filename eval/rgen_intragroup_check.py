@@ -28,7 +28,7 @@ import train_grpo_poison as tgp
 
 # ── 설정 ─────────────────────────────────────────────────────
 CKPT      = "/path/to/DiPoison/results/grpo_n2_q500_run1/final_model"
-INPUT_CSV = "/path/to/DiPoison/data/nq_500_pd_7b.csv"
+INPUT_CSV = "/path/to/DiPoison/data/nq_train_validate/nq_500_pd_7b.csv"
 N_QUERIES = 20     # 몇 개 query를 샘플링할지
 G         = 8      # group size (훈련과 동일)
 DEVICE    = "cuda"

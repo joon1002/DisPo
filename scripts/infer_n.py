@@ -10,7 +10,7 @@ Usage:
   CUDA_VISIBLE_DEVICES=2 HF_HUB_DISABLE_XET=1 PYTHONUNBUFFERED=1 \
     .venv/bin/python scripts/infer_n.py \
     --checkpoint results/<run>/final_model \
-    --input  data/nq100_validate.csv \
+    --input  data/nq_train_validate/nq100_validate.csv \
     --output results/<run>/pd_eval100_n4.csv \
     --gpu_id 2 \
     --num_adv_docs 4
@@ -60,7 +60,7 @@ def _fix_doc(doc: str, target_answer: str) -> str:
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--checkpoint",  default="results/grpo_run1/final_model")
-    p.add_argument("--input",       default="data/nq100_validate.csv")
+    p.add_argument("--input",       default="data/nq_train_validate/nq100_validate.csv")
     p.add_argument("--output",      default="results/grpo_run1/pd_eval100_n4.csv")
     p.add_argument("--gpu_id",      type=int, default=0)
     p.add_argument("--group_size",  type=int, default=8)

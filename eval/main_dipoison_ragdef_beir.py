@@ -410,7 +410,7 @@ def main():
         # beir_title 폴백 매핑 구축 (train500 + input_csv)
         # nq.json에 없는 쿼리는 beir_title로 corpus에서 normal docs 조회
         _q_to_title_lower = {}
-        _aux_path = os.path.join(os.path.dirname(__file__), "../data/nq_500_pd_7b.csv")
+        _aux_path = os.path.join(os.path.dirname(__file__), "../data/nq_train_validate/nq_500_pd_7b.csv")
         if os.path.exists(_aux_path):
             _aux = pd.read_csv(_aux_path)
             if "beir_title" in _aux.columns:

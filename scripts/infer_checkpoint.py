@@ -7,7 +7,7 @@ final_model에서 100 eval 쿼리에 대해 쿼리당 4개(doc0_seed+doc1~doc3) 
 Usage:
   CUDA_VISIBLE_DEVICES=0 python scripts/infer_checkpoint.py \
     --checkpoint results/grpo_run1/final_model \
-    --input  data/nq100_validate.csv \
+    --input  data/nq_train_validate/nq100_validate.csv \
     --output results/grpo_run1/pd_eval100.csv \
     --gpu_id 0 --group_size 8
 """
@@ -58,7 +58,7 @@ def _fix_doc(doc: str, target_answer: str) -> str:
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--checkpoint", default="results/grpo_run1/final_model")
-    p.add_argument("--input",      default="data/nq100_validate.csv")
+    p.add_argument("--input",      default="data/nq_train_validate/nq100_validate.csv")
     p.add_argument("--output",     default="results/grpo_run1/pd_eval100.csv")
     p.add_argument("--gpu_id",        type=int, default=0)
     p.add_argument("--group_size",    type=int, default=8)

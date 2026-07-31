@@ -34,13 +34,13 @@ pip install fschat==0.2.36    # LLM(Vicuna-7B) 생성 단계에 필수 — 누�
 ```bash
 # Step 1: 훈련 (GPU 0, ~8h)
 CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison.py \
-    --input      data/nq_500_pd_7b.csv \
+    --input      data/nq_train_validate/nq_500_pd_7b.csv \
     --output_dir results/grpo_run1
 
 # Step 2: Inference (훈련 완료 후)
 CUDA_VISIBLE_DEVICES=0 python scripts/infer_checkpoint.py \
     --checkpoint results/grpo_run1/final_model \
-    --input      data/nq100_validate.csv \
+    --input      data/nq_train_validate/nq100_validate.csv \
     --output     results/grpo_run1/pd_eval100.csv
 
 # Step 3: 성능평가 — full-corpus 방식이 기본(default)
@@ -69,9 +69,11 @@ DiPoison/
 │   ├── infer_e5_checkpoint.py      # E5 inference
 │   └── apply_number_correction.py     # Post-hoc 교정 (독립 실행 가능)
 ├── data/
-│   ├── nq100_validate.csv             # 평가용 100 쿼리 (고정)
-│   ├── nq_500_pd_7b.csv               # 훈련용 500 쿼리 (기본)
-│   └── nq_800_train.csv               # 훈련용 800 쿼리
+│   └── nq_train_validate/
+│       ├── nq100_validate.csv         # 평가용 100 쿼리 (고정, 훈련과 겹치지 않음)
+│       ├── nq_train100.csv            # 훈련용 100 쿼리 (Supp Fig 2 training-size sensitivity)
+│       ├── nq_train300.csv            # 훈련용 300 쿼리 (Supp Fig 2 training-size sensitivity)
+│       └── nq_500_pd_7b.csv           # 훈련용 500 쿼리 (기본)
 └── results/                           # 훈련/inference 결과 저장 (gitignore)
 ```
 
@@ -81,7 +83,7 @@ DiPoison/
 
 | 파일 | 컬럼 | 설명 |
 |------|------|------|
-| `nq_500_pd_7b.csv` / `nq_800_train.csv` | `query`, `target_answer`, `seed_doc` | 훈련용: 쿼리, 정답, 시드 문서 |
+| `nq_train100.csv` / `nq_train300.csv` / `nq_500_pd_7b.csv` | `query`, `target_answer`, `seed_doc` | 훈련용. `nq_train100`/`nq_train300`은 `nq_500_pd_7b`의 앞 100/300개 쿼리(Supp Fig 2의 훈련 쿼리 수 sensitivity: 100/300/500) |
 | `nq100_validate.csv` | `query`, `target_answer`, `seed_doc` | 평가용: 훈련과 겹치지 않는 100개 |
 
 ---
@@ -141,20 +143,27 @@ rm -rf hotpotqa hotpotqa.zip
 ```bash
 # 기본 실행 (GPU 0, 500 쿼리, epoch=3, G=8, N=4)
 CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison.py \
-    --input      data/nq_500_pd_7b.csv \
+    --input      data/nq_train_validate/nq_500_pd_7b.csv \
     --output_dir results/grpo_run1
+```
 
-# 800 쿼리, epoch=3
+### 훈련 쿼리 수 sensitivity (Supp Fig 2 — 100 / 300 / 500)
+
+```bash
 CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison.py \
-    --input      data/nq_800_train.csv \
-    --output_dir results/grpo_800q_run1
+    --input      data/nq_train_validate/nq_train100.csv \
+    --output_dir results/grpo_train100_run1
+
+CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison.py \
+    --input      data/nq_train_validate/nq_train300.csv \
+    --output_dir results/grpo_train300_run1
 ```
 
 ### E5 (E5-base + Vicuna-7B)
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_e5.py \
-    --input      data/nq_500_pd_7b.csv \
+    --input      data/nq_train_validate/nq_500_pd_7b.csv \
     --output_dir results/grpo_e5_run1
 ```
 
@@ -162,7 +171,7 @@ CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_e5.py \
 
 | 인자 | 기본값 | 설명 |
 |------|--------|------|
-| `--input` | `data/nq_500_pd_7b.csv` | 훈련 쿼리 CSV |
+| `--input` | `data/nq_train_validate/nq_500_pd_7b.csv` | 훈련 쿼리 CSV |
 | `--output_dir` | `results/grpo_run1` | 체크포인트 저장 경로 |
 | `--num_epochs` | `3` | 훈련 epoch 수 |
 | `--group_size` | `8` | GRPO 그룹 크기 **(G)** — 쿼리당 생성 후보 수 |
@@ -186,7 +195,7 @@ CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_e5.py \
 ```bash
 CUDA_VISIBLE_DEVICES=0 python scripts/infer_checkpoint.py \
     --checkpoint    results/grpo_run1/final_model \
-    --input         data/nq100_validate.csv \
+    --input         data/nq_train_validate/nq100_validate.csv \
     --output        results/grpo_run1/pd_eval100.csv \
     --group_size    8 \
     --gen_batch_size 8
@@ -197,7 +206,7 @@ CUDA_VISIBLE_DEVICES=0 python scripts/infer_checkpoint.py \
 ```bash
 CUDA_VISIBLE_DEVICES=0 python scripts/infer_e5_checkpoint.py \
     --checkpoint    results/grpo_e5_run1/final_model \
-    --input         data/nq100_validate.csv \
+    --input         data/nq_train_validate/nq100_validate.csv \
     --output        results/grpo_e5_run1/pd_eval100_e5.csv \
     --group_size    8 \
     --gen_batch_size 8
@@ -208,7 +217,7 @@ CUDA_VISIBLE_DEVICES=0 python scripts/infer_e5_checkpoint.py \
 ```bash
 CUDA_VISIBLE_DEVICES=0 python scripts/infer_n.py \
     --checkpoint    results/grpo_run1/final_model \
-    --input         data/nq100_validate.csv \
+    --input         data/nq_train_validate/nq100_validate.csv \
     --output        results/grpo_run1/pd_eval100_n6.csv \
     --N 6 \
     --group_size    8 \
@@ -220,7 +229,7 @@ CUDA_VISIBLE_DEVICES=0 python scripts/infer_n.py \
 | 인자 | 기본값 | 설명 |
 |------|--------|------|
 | `--checkpoint` | `results/.../final_model` | LoRA 체크포인트 경로 |
-| `--input` | `data/nq100_validate.csv` | 평가 쿼리 CSV |
+| `--input` | `data/nq_train_validate/nq100_validate.csv` | 평가 쿼리 CSV |
 | `--output` | `results/.../pd_eval100.csv` | 출력 CSV 경로 |
 | `--group_size` | `8` | 후보 생성 수 **(G)**, best 1개 선택 |
 | `--num_adv_docs` | `3` | 쿼리당 생성할 악성 문서 수 **(N)** |
