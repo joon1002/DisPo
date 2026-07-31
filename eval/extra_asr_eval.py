@@ -1,10 +1,10 @@
 """
 extra_asr_eval.py
 
-3가지 추가 실험 (ASR + Accuracy 측정):
-  1. top-20 Baseline : Contriever top-20 → Vicuna (no defense)
-  2. RAGDefender-all : top-20 → RAGDefender → ALL clean docs → Vicuna
-  3. 3-doc Attack    : Contriever top-5, seed doc 제외한 3개 poison → Vicuna
+3 additional experiments (ASR + Accuracy measurement):
+  1. top-20 Baseline : Contriever top-20 -> Vicuna (no defense)
+  2. RAGDefender-all : top-20 -> RAGDefender -> ALL clean docs -> Vicuna
+  3. 3-doc Attack    : Contriever top-5, 3 poison docs excluding the seed doc -> Vicuna
 
 Usage:
   cd eval/
@@ -87,7 +87,7 @@ print(f"[load] corpus={len(corpus)}, qrels={len(qrels)}")
 # ─── load poison docs CSV ────────────────────────────────────
 docs_df  = pd.read_csv(args.docs_csv)
 ALL_DOC_COLS  = ["doc0_seed", "doc1", "doc2", "doc3"]   # 4-doc attack
-NO_SEED_COLS  = ["doc1", "doc2", "doc3"]                 # 3-doc attack (seed 제외)
+NO_SEED_COLS  = ["doc1", "doc2", "doc3"]                 # 3-doc attack (excludes the seed)
 print(f"[load] poison docs: {len(docs_df)} queries")
 
 # ─── Contriever ───────────────────────────────────────────────
@@ -176,8 +176,8 @@ def _ragdef_tfidf_count(docs):
 
 def ragdefender_filter(docs, s_model, top_k=None):
     """
-    AgglomerativeClustering(n_clusters=2)으로 poison cluster 탐지 후 제거.
-    top_k=None이면 clean doc 전부 반환 (상한 없음).
+    Detects and removes the poison cluster via AgglomerativeClustering(n_clusters=2).
+    If top_k=None, returns all clean docs (no upper bound).
     """
     if len(docs) <= 2:
         return docs if top_k is None else docs[:top_k]
@@ -196,7 +196,7 @@ def ragdefender_filter(docs, s_model, top_k=None):
         clean_docs = docs
     return clean_docs if top_k is None else clean_docs[:top_k]
 
-# ─── per-query pool 구성 ─────────────────────────────────────
+# ─── Build per-query pool ───────────────────────────────────
 print("[prep] building per-query candidate pools...")
 query_data = []
 for _, row in docs_df.iterrows():
@@ -239,8 +239,8 @@ for entry in tqdm(query_data, ncols=90):
 
 gc.collect(); torch.cuda.empty_cache()
 
-# ─── 실험 1: top-5 Baseline (4-doc, 참고용) ─────────────────
-print("\n[Exp 0] top-5 Baseline (4-doc, accuracy 추가)")
+# ─── Experiment 1: top-5 Baseline (4-doc, for reference) ────
+print("\n[Exp 0] top-5 Baseline (4-doc, accuracy added)")
 e0_asr = e0_acc = e0_prec = e0_rec = e0_f1 = 0
 for entry in tqdm(query_data, desc="Baseline-top5", ncols=90):
     docs = entry["n5_docs_4p"]
@@ -255,7 +255,7 @@ for entry in tqdm(query_data, desc="Baseline-top5", ncols=90):
     e0_asr += asr; e0_acc += acc
     e0_prec += P; e0_rec += R; e0_f1 += F
 
-# ─── 실험 1: top-20 Baseline (no defense) ────────────────────
+# ─── Experiment 1: top-20 Baseline (no defense) ──────────────
 print("\n[Exp 1] top-20 Baseline (no defense)")
 e1_asr = e1_acc = e1_prec = e1_rec = e1_f1 = 0
 for entry in tqdm(query_data, desc="Baseline-top20", ncols=90):
@@ -273,7 +273,7 @@ for entry in tqdm(query_data, desc="Baseline-top20", ncols=90):
 
 gc.collect(); torch.cuda.empty_cache()
 
-# ─── 실험 2: top-20 → RAGDefender → ALL clean → Vicuna ───────
+# ─── Experiment 2: top-20 -> RAGDefender -> ALL clean -> Vicuna ──
 print("\n[Exp 2] top-20 → RAGDefender → ALL clean docs → Vicuna")
 ragdef_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 ragdef_model.to(DEVICE)
@@ -303,7 +303,7 @@ for entry in tqdm(query_data, desc="RAGDef-all", ncols=90):
 del ragdef_model
 gc.collect(); torch.cuda.empty_cache()
 
-# ─── 실험 3: top-5 (3-doc attack, seed 제외) ─────────────────
+# ─── Experiment 3: top-5 (3-doc attack, excludes the seed) ───
 print("\n[Exp 3] top-5 with 3-doc attack (seed doc excluded)")
 e3_asr = e3_acc = e3_prec = e3_rec = e3_f1 = 0
 for entry in tqdm(query_data, desc="3-doc-top5", ncols=90):
@@ -319,14 +319,14 @@ for entry in tqdm(query_data, desc="3-doc-top5", ncols=90):
     e3_asr += asr; e3_acc += acc
     e3_prec += P; e3_rec += R; e3_f1 += F
 
-# ─── 결과 출력 ───────────────────────────────────────────────
+# ─── Print results ───────────────────────────────────────────
 W = 84
 print(f"\n{'='*W}")
-print(f"  추가 실험 결과 (쿼리 수: {N})")
-print(f"  {'방법':<40}  {'P':>8}  {'R':>7}  {'F1':>5}  {'ASR':>6}  {'ACC':>6}")
+print(f"  Additional experiment results (queries: {N})")
+print(f"  {'Method':<40}  {'P':>8}  {'R':>7}  {'F1':>5}  {'ASR':>6}  {'ACC':>6}")
 print(f"  {'-'*W}")
 
-# Exp0: top-5 baseline (acc 포함, 재측정)
+# Exp0: top-5 baseline (includes acc, remeasured)
 print(f"  {'Baseline top-5 (4-doc, re-measure)':<40}  "
       f"{e0_prec/N*100:>7.1f}%  {e0_rec/N*100:>6.1f}%  {e0_f1/N*100:>4.1f}%  "
       f"{e0_asr/N*100:>5.1f}%  {e0_acc/N*100:>5.1f}%")
@@ -351,8 +351,8 @@ print(f"  {'3-doc Attack top-5 (no seed doc)':<40}  "
       f"{e3_asr/N*100:>5.1f}%  {e3_acc/N*100:>5.1f}%  (ΔASR vs 4-doc {delta3_asr:+.1f}%p)")
 
 print(f"{'='*W}")
-print(f"\n  ※ P/R/F1 = poison doc 기준 (공격 입장, 높을수록 공격 성공)")
-print(f"  ※ ASR = target(wrong) answer 생성율, ACC = correct answer 생성율")
-print(f"  ※ RAGDefender-all: top-20 에서 poison cluster 제거 후 남은 전체 doc → Vicuna")
-print(f"  ※ 3-doc Attack: doc0_seed 제외, doc1+doc2+doc3만 삽입")
+print(f"\n  * P/R/F1 = measured against poison docs (from the attacker's perspective, higher = more successful)")
+print(f"  * ASR = rate at which the target (wrong) answer is generated, ACC = rate at which the correct answer is generated")
+print(f"  * RAGDefender-all: all docs remaining after removing the poison cluster from top-20 -> Vicuna")
+print(f"  * 3-doc Attack: excludes doc0_seed, injects only doc1+doc2+doc3")
 print(f"{'='*W}")
