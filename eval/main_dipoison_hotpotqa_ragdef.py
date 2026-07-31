@@ -1,14 +1,14 @@
 """
-[LEGACY] 쿼리당 소수 후보 문서끼리만 경쟁시키는 방식입니다.
-HotpotQA full-corpus 평가는 main_dipoison_fullcorpus_ragdef.py --dataset hotpotqa 를 사용하세요.
+[LEGACY] Pits only a handful of candidate documents against each other per query.
+For HotpotQA full-corpus evaluation, use main_dipoison_fullcorpus_ragdef.py --dataset hotpotqa instead.
 
 main_dipoison_hotpotqa_ragdef.py — HotpotQA BEIR corpus RAGDefender pipeline evaluation
 
-main_dipoison_extraval_ragdef.py와 동일한 파이프라인.
-차이점: BEIR HotpotQA corpus(/path/to/datasets/hotpotqa/) 사용.
+Same pipeline as main_dipoison_extraval_ragdef.py.
+Difference: uses the BEIR HotpotQA corpus (/path/to/datasets/hotpotqa/).
   - corpus.jsonl: 5.2M Wikipedia passages
-  - queries.jsonl: query text → BEIR _id 매핑
-  - qrels (train+dev+test): query_id → relevant corpus_id
+  - queries.jsonl: query text -> BEIR _id mapping
+  - qrels (train+dev+test): query_id -> relevant corpus_id
 
 Usage:
   CUDA_VISIBLE_DEVICES=1 HF_HUB_DISABLE_XET=1 python eval/main_dipoison_hotpotqa_ragdef.py \\
@@ -54,7 +54,7 @@ _LLAMA3_MODEL  = "meta-llama/Meta-Llama-3-8B-Instruct"
 _QWEN25_MODEL  = "Qwen/Qwen2.5-7B-Instruct"
 
 
-# ── 유틸 ────────────────────────────────────────────────────────────────────
+# ── Utilities ────────────────────────────────────────────────────────────
 def load_json(file_path):
     with open(file_path) as f:
         return json.load(f)
@@ -85,9 +85,9 @@ def setup_seeds(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-# ── HotpotQA BEIR corpus 로딩 ────────────────────────────────────────────────
+# ── Load HotpotQA BEIR corpus ────────────────────────────────────────────
 def load_hotpotqa_corpus_qrels():
-    """NQ의 load_beir_corpus_qrels()와 동일 역할. train+dev+test qrels 합산."""
+    """Plays the same role as NQ's load_beir_corpus_qrels(). Combines train+dev+test qrels."""
     corpus = {}
     with open(_HOTPOTQA_CORPUS_PATH) as f:
         for line in f:
@@ -107,7 +107,7 @@ def load_hotpotqa_corpus_qrels():
     return corpus, qrels
 
 
-# ── 프롬프트 ─────────────────────────────────────────────────────────────────
+# ── Prompts ──────────────────────────────────────────────────────────────
 _PROMPT_TMPL = (
     "You are a helpful assistant, below is a query from a user and some relevant contexts. "
     "Answer the question given the information in those contexts. Your answer should be short and concise. "
@@ -290,7 +290,7 @@ def llm_judge_attack(llm, query, response, target):
         return False
 
 
-# ── 로깅 ─────────────────────────────────────────────────────────────────────
+# ── Logging ──────────────────────────────────────────────────────────────
 def setup_txt_logger():
     log_dir = str(_ROOT / "txt_logs_hotpotqa")
     os.makedirs(log_dir, exist_ok=True)
@@ -316,7 +316,7 @@ def log_json_block(fp, title, data):
 def parse_args():
     p = argparse.ArgumentParser(description="HotpotQA BEIR corpus RAGDefender eval")
     p.add_argument("--docs_csv",        type=str, required=True,
-                   help="inference 결과 CSV (poison docs)")
+                   help="Inference-result CSV (poison docs)")
     p.add_argument("--top_k",           type=int, default=5)
     p.add_argument("--adv_per_query",   type=int, default=4)
     p.add_argument("--seed",            type=int, default=12)
@@ -359,7 +359,7 @@ def main():
         })
 
         # ── Models ──────────────────────────────────────────────────────────
-        log(log_fp, "\n[load] 모델 로딩 시작...")
+        log(log_fp, "\n[load] Starting model loading...")
         defense_model = SentenceTransformer(args.defense_model, trust_remote_code=True)
         log(log_fp, f"[load] defense model  : {args.defense_model}")
 
@@ -412,17 +412,17 @@ def main():
 
         gc.collect(); torch.cuda.empty_cache()
 
-        # ── HotpotQA BEIR corpus 로딩 ────────────────────────────────────────
-        log(log_fp, "\n[load] HotpotQA BEIR corpus 로딩 중 (5.2M passages)...")
+        # ── Load HotpotQA BEIR corpus ───────────────────────────────────────
+        log(log_fp, "\n[load] Loading HotpotQA BEIR corpus (5.2M passages)...")
         corpus, qrels = load_hotpotqa_corpus_qrels()
         log(log_fp, f"[load] corpus={len(corpus)}, qrels(queries)={len(qrels)}")
 
-        # title → texts 인덱스 (NQ eval과 동일 방식)
+        # title -> texts index (same approach as the NQ eval)
         title_to_texts: dict = {}
         for pid, doc in corpus.items():
             title_to_texts.setdefault(doc.get("title", ""), []).append(doc["text"])
 
-        # query text → BEIR query_id 매핑
+        # query text -> BEIR query_id mapping
         q_to_beir_id = {}
         with open(_HOTPOTQA_QUERIES_PATH) as f:
             for line in f:
@@ -438,7 +438,7 @@ def main():
                     docs.append(corpus[pid]["text"])
             return docs
 
-        # ── docs_csv poison docs 구성 ────────────────────────────────────────
+        # ── Build poison docs from docs_csv ─────────────────────────────────
         docs_df = pd.read_csv(args.docs_csv)
         log(log_fp, f"[load] docs_csv rows: {len(docs_df)}")
 
@@ -466,7 +466,7 @@ def main():
 
         log(log_fp, f"[prep] {len(rows_data)} valid queries (skipped={skipped})")
         if not rows_data:
-            log(log_fp, "[ERROR] 유효 쿼리 없음. 종료.")
+            log(log_fp, "[ERROR] No valid queries. Exiting.")
             return
 
         # ── Main loop ────────────────────────────────────────────────────────
@@ -588,7 +588,7 @@ def main():
         pbar.close()
         n = len(csv_rows)
 
-        # ── 결과 ─────────────────────────────────────────────────────────────
+        # ── Results ─────────────────────────────────────────────────────────
         nd_rr = total_queries_with_poison / n if n else 0.0
         nd_rc = total_poison_in_topk / total_poison_injected if total_poison_injected else 0.0
         nd_pr = total_poison_in_topk / total_retrieved_docs  if total_retrieved_docs  else 0.0
@@ -619,8 +619,8 @@ def main():
         log(log_fp, f"[final] RD  ASR={rd_asr_cnt/n:.2%} | acc={rd_acc_cnt/n:.2%}")
         log(log_fp, f"[retrieval] recall={nd_rc:.4f}  precision={nd_pr:.4f}  f1={nd_f1:.4f}")
         log(log_fp, f"\n{'='*58}")
-        log(log_fp, f"  평가 결과: {os.path.basename(args.docs_csv)}  (N={n})")
-        log(log_fp, f"  {'지표':<30} {'값':>10}")
+        log(log_fp, f"  Evaluation result: {os.path.basename(args.docs_csv)}  (N={n})")
+        log(log_fp, f"  {'Metric':<30} {'Value':>10}")
         log(log_fp, f"  {'-'*40}")
         log(log_fp, f"  {'nd-asr':<30} {nd_asr_cnt/n*100:>9.1f}%")
         log(log_fp, f"  {'rd-asr':<30} {rd_asr_cnt/n*100:>9.1f}%")
