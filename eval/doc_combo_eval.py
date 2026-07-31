@@ -1,9 +1,9 @@
 """
 doc_combo_eval.py
 
-3-doc 조합 ASR 비교 (top-5):
-  - Combo A: doc1~3  (doc1, doc2, doc3)  — seed 제외
-  - Combo B: doc0~2  (doc0_seed, doc1, doc2) — doc3 제외
+Compares ASR across 3-doc combinations (top-5):
+  - Combo A: doc1~3  (doc1, doc2, doc3)  — excludes the seed
+  - Combo B: doc0~2  (doc0_seed, doc1, doc2) — excludes doc3
 
 Usage:
   HF_HUB_DISABLE_XET=1 PYTHONUNBUFFERED=1 CUDA_VISIBLE_DEVICES=0 \
@@ -42,8 +42,8 @@ ANSWERS_JSON = rp(args.answers_json)
 DEVICE       = f"cuda:{args.gpu_id}" if torch.cuda.is_available() else "cpu"
 TOP_K        = args.top_k
 
-COMBO_A_COLS = ["doc1", "doc2", "doc3"]           # seed 제외
-COMBO_B_COLS = ["doc0_seed", "doc1", "doc2"]       # doc3 제외
+COMBO_A_COLS = ["doc1", "doc2", "doc3"]           # excludes the seed
+COMBO_B_COLS = ["doc0_seed", "doc1", "doc2"]       # excludes doc3
 
 # ─── corpus ──────────────────────────────────────────────────
 print("[load] BEIR NQ corpus...")
@@ -214,11 +214,11 @@ for entry in tqdm(query_data, desc="ComboB", ncols=90):
     b_acc += entry["correct"].lower() in resp.lower()
     b_prec += P; b_rec += R; b_f1 += F
 
-# ─── 결과 ────────────────────────────────────────────────────
+# ─── Results ─────────────────────────────────────────────────
 W = 82
 print(f"\n{'='*W}")
-print(f"  3-doc 조합 비교 (top-5, N={N})")
-print(f"  {'조합':<30}  {'P':>7}  {'R':>7}  {'F1':>5}  {'ASR':>6}  {'ACC':>6}")
+print(f"  3-doc combination comparison (top-5, N={N})")
+print(f"  {'Combo':<30}  {'P':>7}  {'R':>7}  {'F1':>5}  {'ASR':>6}  {'ACC':>6}")
 print(f"  {'-'*W}")
 print(f"  {'Combo A: doc1~3  (no seed)':<30}  "
       f"{a_prec/N*100:>6.1f}%  {a_rec/N*100:>6.1f}%  {a_f1/N*100:>4.1f}%  "
@@ -231,8 +231,8 @@ diff_asr = b_asr/N*100 - a_asr/N*100
 diff_acc = b_acc/N*100 - a_acc/N*100
 print(f"  {'Δ (B - A)':<30}  {'':>7}  {'':>7}  {'':>5}  {diff_asr:>+5.1f}%  {diff_acc:>+5.1f}%")
 print(f"{'='*W}")
-print(f"\n  ※ P/R/F1 = 해당 조합의 poison doc이 top-5에 포함된 비율")
-print(f"  ※ ASR = target(wrong) answer 생성율")
-print(f"  ※ ACC = correct answer 생성율")
-print(f"  ※ doc0_seed = GRPO 학습의 초기 seed 문서")
+print(f"\n  * P/R/F1 = fraction of this combo's poison docs included in the top-5")
+print(f"  * ASR = rate at which the target (wrong) answer is generated")
+print(f"  * ACC = rate at which the correct answer is generated")
+print(f"  * doc0_seed = the initial seed document used for GRPO training")
 print(f"{'='*W}")
