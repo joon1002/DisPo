@@ -62,8 +62,8 @@ def main():
     cfg = _DS_CFG[args.dataset]
     model_hf_name = _RETRIEVAL_ALIAS["contriever"]
 
-    # ── corpus 로딩 ──────────────────────────────────────────────
-    print(f"[load] corpus 로딩: {cfg['corpus_path']}")
+    # ── Load corpus ──────────────────────────────────────────────
+    print(f"[load] Loading corpus: {cfg['corpus_path']}")
     corpus_texts = []
     with open(cfg["corpus_path"]) as f:
         for line in f:
@@ -81,14 +81,14 @@ def main():
     def encode_fn(texts):
         return contriever_encode(texts, ctv_mod, ctv_tok, device, batch_size=64)
 
-    # ── corpus embeddings (캐시 재사용) ────────────────────────────
+    # ── corpus embeddings (reuses cache) ───────────────────────────
     cache_path = _cache_path_for(cfg, model_hf_name)
     corpus_embs = build_or_load_corpus_embs(
         corpus_texts, cache_path, encode_fn, print, batch_size=args.embed_batch,
     )
-    print(f"[embed] GPU 전송 중... ({corpus_embs.shape[0]:,} x {corpus_embs.shape[1]})")
+    print(f"[embed] Transferring to GPU... ({corpus_embs.shape[0]:,} x {corpus_embs.shape[1]})")
     corpus_embs_gpu = corpus_embs.half().to(device)
-    print(f"[embed] 완료. GPU mem: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+    print(f"[embed] Complete. GPU mem: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
     # ── Vicuna ───────────────────────────────────────────────────
     print(f"[load] LLM via create_model: {args.model_config_path}")
