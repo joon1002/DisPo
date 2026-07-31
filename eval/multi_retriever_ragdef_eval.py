@@ -1,11 +1,10 @@
 """
 multi_retriever_ragdef_eval.py
 
-8가지 검색기 × top-{5,10} = 16 조합에 대해
-PRR / ND-ASR / RD-ASR 측정.
+Measures PRR / ND-ASR / RD-ASR across 8 retrievers x top-{5,10} = 16 combinations.
 
-- Vicuna-7B, defense_model은 한 번만 로드
-- 검색기는 clean_topn_cache 기반 (full corpus top-50 캐시)
+- Vicuna-7B and defense_model are each loaded only once
+- Retrievers work off clean_topn_cache (full-corpus top-50 cache)
 - RAGDefender singlehop (AgglomerativeClustering + TF-IDF Stage1 + freq-score Stage2)
 
 Usage:
@@ -16,7 +15,7 @@ Usage:
     --docs_csv data/generated/pd_eval100_merged_n7.csv \\
     --out_json eval/results/multi_retriever_ragdef/pd_eval100_merged_n7_summary.json
 
-  # MSMARCO 서버에서는 --corpus_path/--cache_dir만 서버 경로에 맞게 지정
+  # On an MSMARCO server, just point --corpus_path/--cache_dir at that server's paths
   CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 /path/to/ragdef/.venv/bin/python \\
     eval/multi_retriever_ragdef_eval.py \\
     --dataset msmarco \\
@@ -61,7 +60,7 @@ _DEFAULT_CACHE_DIRS = {
 _VICUNA_MODEL   = "lmsys/vicuna-7b-v1.3"
 _DEFENSE_MODEL  = "paraphrase-MiniLM-L6-v2"
 
-# RAGDefender defense embedding space (Supp Table 5: matched=minilm, unseen=나머지)
+# RAGDefender defense embedding space (Supp Table 5: matched=minilm, unseen=the rest)
 _DEFENSE_MODEL_ALIASES = {
     "minilm": "paraphrase-MiniLM-L6-v2",
     "mpnet":  "sentence-transformers/all-mpnet-base-v2",
@@ -70,7 +69,7 @@ _DEFENSE_MODEL_ALIASES = {
     "gte":    "thenlper/gte-base",
 }
 
-# ── 8가지 검색기 설정 ─────────────────────────────────────────────────────────
+# ── 8-retriever configuration ───────────────────────────────────────────────
 _RETRIEVERS = [
     # (label,        cache_file,              retrieval_model_key,     hf_id,                        enc_type)
     ("contriever",   "contriever_top50.pt",   "contriever",            "facebook/contriever",                                              "contriever"),
@@ -112,7 +111,7 @@ _PROMPT_TMPL = (
 )
 
 
-# ── 유틸 ──────────────────────────────────────────────────────────────────────
+# ── Utilities ────────────────────────────────────────────────────────────────
 def log(msg):
     print(msg, flush=True)
 
@@ -134,7 +133,7 @@ def wrap_prompt(question, docs):
     return _PROMPT_TMPL.replace("[question]", question).replace("[context]", ctx)
 
 
-# ── Contriever 인코딩 ─────────────────────────────────────────────────────────
+# ── Contriever encoding ─────────────────────────────────────────────────────
 def _mean_pool(token_embs, attention_mask):
     mask = attention_mask.unsqueeze(-1).expand(token_embs.size()).float()
     return torch.sum(token_embs * mask, 1) / torch.clamp(mask.sum(1), min=1e-9)
@@ -177,7 +176,7 @@ def _bm25_score_doc(bm25_params, query_tokens, doc_tokens):
     return score
 
 
-# ── clean_topn_cache 로드 ─────────────────────────────────────────────────────
+# ── Load clean_topn_cache ───────────────────────────────────────────────────
 def load_topn_cache(cache_path, retrieval_model_key, model_hf_id):
     cache = torch.load(cache_path, map_location="cpu", weights_only=True)
     meta  = cache.get("meta", {})
@@ -190,7 +189,7 @@ def load_topn_cache(cache_path, retrieval_model_key, model_hf_id):
     return cache
 
 
-# ── cached top-k 검색 ─────────────────────────────────────────────────────────
+# ── Cached top-k retrieval ──────────────────────────────────────────────────
 def retrieve_cached(query, adv_docs, cache, corpus_texts,
                     encode_fn, use_cosine, device, top_k,
                     q_prefix="", d_prefix="",
@@ -356,8 +355,8 @@ def main():
     p.add_argument("--gpu_id",     type=int, default=0)
     p.add_argument("--vicuna_model", type=str, default=_VICUNA_MODEL)
     p.add_argument("--defense_model", type=str, default="minilm",
-                   help="Alias(minilm/mpnet/ance/bge/gte, Supp Table 5의 matched/unseen 공간) "
-                        "또는 임의의 SentenceTransformer ID.")
+                   help="Alias(minilm/mpnet/ance/bge/gte, the matched/unseen spaces in Supp Table 5) "
+                        "or any SentenceTransformer ID.")
     args = p.parse_args()
     args.defense_model = _DEFENSE_MODEL_ALIASES.get(args.defense_model, args.defense_model)
 
@@ -401,7 +400,7 @@ def main():
     logw(f"[config] defense=singlehop ({args.defense_model}), device={device}")
     logw(f"[config] generator={args.vicuna_model}")
 
-    # ── 공격 CSV 로드 ──────────────────────────────────────────────────────────
+    # ── Load attack CSV ─────────────────────────────────────────────────────
     df_atk = pd.read_csv(args.docs_csv)
     required_cols = {"query", "target_answer"}
     missing_cols = sorted(required_cols - set(df_atk.columns))
@@ -421,8 +420,8 @@ def main():
     ]
     logw(f"[csv] {len(queries)} queries, adv_n={len(adv_docs_per_query[0])}")
 
-    # ── full corpus 로드 ──────────────────────────────────────────────────────
-    logw("[step1] corpus.jsonl 로드...")
+    # ── Load full corpus ────────────────────────────────────────────────────
+    logw("[step1] Loading corpus.jsonl...")
     corpus_texts = []
     with open(corpus_path) as f:
         for line in f:
@@ -430,28 +429,28 @@ def main():
             corpus_texts.append(d.get("text", "") or d.get("contents", ""))
     logw(f"[step1] corpus {len(corpus_texts):,} passages")
 
-    # ── defense model 로드 ─────────────────────────────────────────────────────
-    logw(f"[step2] defense model 로드: {args.defense_model}")
+    # ── Load defense model ──────────────────────────────────────────────────
+    logw(f"[step2] Loading defense model: {args.defense_model}")
     defense_model = SentenceTransformer(args.defense_model)
-    logw("[step2] defense model 완료")
+    logw("[step2] defense model loaded")
 
-    # ── Vicuna-7B 로드 ─────────────────────────────────────────────────────────
-    logw("[step3] Vicuna-7B 로드...")
+    # ── Load Vicuna-7B ──────────────────────────────────────────────────────
+    logw("[step3] Loading Vicuna-7B...")
     llm_model, llm_tok, get_conv = load_vicuna(device, args.vicuna_model)
-    logw(f"[step3] Vicuna-7B 완료. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+    logw(f"[step3] Vicuna-7B loaded. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
-    # ── 8 retrievers × 2 top-k 평가 루프 ─────────────────────────────────────
+    # ── 8 retrievers x 2 top-k evaluation loop ───────────────────────────────
     partial_path = Path(args.out_json).with_suffix(".partial.json")
     if partial_path.exists():
         with open(partial_path) as f:
             all_results = json.load(f)
-        logw(f"[resume] partial 결과 로드: {list(all_results.keys())}")
+        logw(f"[resume] Loaded partial results: {list(all_results.keys())}")
     else:
         all_results = {}
 
     for (label, cache_file, ret_key, hf_id, enc_type) in retrievers:
         if label in all_results:
-            logw(f"[skip] {label} — partial에 이미 존재, 건너뜀")
+            logw(f"[skip] {label} — already present in partial results, skipping")
             continue
 
         logw(f"\n{'='*62}")
@@ -459,9 +458,9 @@ def main():
 
         cache_path = os.path.join(cache_dir, cache_file)
         cache = load_topn_cache(cache_path, ret_key, hf_id)
-        logw(f"[cache] {cache_file} 로드 완료")
+        logw(f"[cache] {cache_file} loaded")
 
-        # retriever 모델 로드
+        # Load retriever model
         bm25_params = None
         encode_fn   = None
         use_cosine  = False
@@ -547,7 +546,7 @@ def main():
             all_results[label][f"top{top_k}"] = result
             logw(f"  [result] {label}/top{top_k}: PRR={prr/n:.2%}  ND-ASR={nd_asr/n:.2%}  RD-ASR={rd_asr/n:.2%}")
 
-        # retriever 모델 해제
+        # Release retriever model
         if enc_type == "contriever":
             del ctv_mod, ctv_tok
         elif enc_type == "st":
@@ -556,19 +555,19 @@ def main():
         gc.collect(); torch.cuda.empty_cache()
         logw(f"[unload] {label} GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
-        # 중간 저장
+        # Intermediate save
         with open(partial_path, "w") as f:
             json.dump(all_results, f, indent=2, ensure_ascii=False)
         logw(f"[partial] {partial_path}")
 
-    # ── 결과 저장 ──────────────────────────────────────────────────────────────
+    # ── Save results ────────────────────────────────────────────────────────
     with open(args.out_json, "w") as f:
         json.dump(all_results, f, indent=2, ensure_ascii=False)
     logw(f"\n[save] {args.out_json}")
 
-    # ── 요약 표 출력 ───────────────────────────────────────────────────────────
+    # ── Print summary table ─────────────────────────────────────────────────
     logw(f"\n{'='*70}")
-    logw(f"{'검색기':<12} {'top-k':<7} {'PRR':>7} {'ND-ASR':>8} {'RD-ASR':>8}")
+    logw(f"{'Retriever':<12} {'top-k':<7} {'PRR':>7} {'ND-ASR':>8} {'RD-ASR':>8}")
     logw(f"{'-'*70}")
     for label, topk_results in all_results.items():
         for topk_str, res in topk_results.items():
