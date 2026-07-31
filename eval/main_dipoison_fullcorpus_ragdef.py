@@ -1,8 +1,9 @@
 """
 main_dipoison_fullcorpus_ragdef.py — Full-corpus retrieval + RAGDefender eval
 
-PoisonedRAG 논문 기준: 전체 corpus (NQ 2.6M / HotpotQA 5.2M) 에 adv docs 주입 후
-retriever로 전체 코퍼스에서 top-k 검색 → RAGDefender 2-stage → Vicuna-7B → ASR 측정.
+Following the PoisonedRAG paper's setting: adv docs are injected into the full corpus
+(NQ 2.6M / HotpotQA 5.2M), then top-k is retrieved from the whole corpus -> RAGDefender
+2-stage -> Vicuna-7B -> ASR is measured.
 
 Supported retrievers (--retrieval_model) — the 8 retrievers evaluated in the paper
 (Table 3, Supplementary Table 10/11):
@@ -60,11 +61,11 @@ from src.models import create_model
 from src.prompts import wrap_prompt as legacy_wrap_prompt
 from src.prompts import wrap_prompt_llama as legacy_wrap_prompt_llama
 
-# 서버마다 대용량 데이터 저장 위치가 다를 수 있어 환경변수로 override 가능
-# (예: export DIPOISON_DATA_ROOT=/path/to)
+# Large data storage location can differ per server, so it's overridable via an env var
+# (e.g. export DIPOISON_DATA_ROOT=/path/to)
 _DATA_ROOT = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
 
-# ── Dataset 설정 ──────────────────────────────────────────────────────────────
+# ── Dataset configuration ────────────────────────────────────────────────────
 _DS_CFG = {
     "nq": {
         "corpus_path":   f"{_DATA_ROOT}/datasets/nq/corpus.jsonl",
@@ -108,11 +109,11 @@ _DEFENSE_MODEL_ALIASES = {
     "gte":    "thenlper/gte-base",
 }
 
-# Contriever 계열: mean-pool + dot-product (비정규화)
+# Contriever family: mean-pool + dot-product (unnormalized)
 _CONTRIEVER_FAMILY = {"facebook/contriever", "facebook/contriever-msmarco"}
 
-# 학습 시 dot-product(비정규화) 사용 → cosine 정규화 불필요
-# query / document prefix (E5, BGE, Nomic 등)
+# Training uses dot-product (unnormalized), so cosine normalization isn't needed
+# query / document prefix (E5, BGE, Nomic, etc.)
 _QUERY_PREFIXES = {
     "intfloat/e5-base-v2":          "query: ",
     "BAAI/bge-base-en-v1.5":        "Represent this sentence for searching relevant passages: ",
@@ -149,7 +150,7 @@ def _bm25_score_doc(bm25_params, query_tokens, doc_tokens):
 _DEFAULT_MODEL_CONFIG = str(_ROOT / "model_configs" / "vicuna7b_config.json")
 _VICUNA_MODEL = "lmsys/vicuna-7b-v1.3"
 
-# ── 유틸 ──────────────────────────────────────────────────────────────────────
+# ── Utilities ─────────────────────────────────────────────────────────────────
 def clean_str(s):
     s = str(s).strip()
     if len(s) > 1 and s[-1] == ".":
@@ -162,8 +163,8 @@ def load_json(path):
 
 def top_similar_pairs(texts, model, top_k):
     """RAGDefender Stage 2 (pairwise frequency-score filter, paper §2.3 / eval/README.md):
-    top-k 문서 쌍 중 코사인 유사도가 가장 높은 top_k쌍을 반환 — 이 쌍들의 빈도 누적으로
-    악성 클러스터 후보를 추정한다."""
+    returns the top_k pairs with the highest cosine similarity among all document pairs —
+    accumulating the frequency of these pairs estimates the poison cluster candidates."""
     embs = model.encode(texts, convert_to_tensor=True)
     cos  = st_util.cos_sim(embs, embs)
     pairs = [(i, j, cos[i][j].item())
@@ -171,7 +172,7 @@ def top_similar_pairs(texts, model, top_k):
              for j in range(i + 1, len(texts))]
     return sorted(pairs, key=lambda x: x[2], reverse=True)[:top_k]
 
-# ── Contriever 인코딩 ─────────────────────────────────────────────────────────
+# ── Contriever encoding ───────────────────────────────────────────────────────
 def _mean_pool(token_embs, attention_mask):
     mask = attention_mask.unsqueeze(-1).expand(token_embs.size()).float()
     return torch.sum(token_embs * mask, 1) / torch.clamp(mask.sum(1), min=1e-9)
@@ -190,24 +191,24 @@ def contriever_encode(texts, model, tokenizer, device, batch_size=64):
     return torch.cat(all_embs, dim=0)
 
 def _cache_path_for(dataset_cfg, model_hf_name):
-    """retriever별 캐시 파일 경로. contriever는 기존 파일명 유지."""
+    """Per-retriever cache file path. Contriever keeps its original filename for compatibility."""
     cache_dir = dataset_cfg["embed_cache_dir"]
     safe_name = model_hf_name.replace("/", "_")
-    # 기존 contriever 캐시 파일명 호환 유지
+    # Keeps compatibility with the pre-existing Contriever cache filename
     if model_hf_name == "facebook/contriever":
         return os.path.join(cache_dir, "contriever_embs_fullcorpus.pt")
     return os.path.join(cache_dir, f"{safe_name}_embs_fullcorpus.pt")
 
 
 def build_or_load_corpus_embs(corpus_texts, cache_path, encoder_fn, log_fn, batch_size=512):
-    """corpus 임베딩 빌드 또는 캐시 로드. encoder_fn(texts) → cpu tensor."""
+    """Builds corpus embeddings or loads them from cache. encoder_fn(texts) -> cpu tensor."""
     if os.path.exists(cache_path):
-        log_fn(f"[embed] 캐시 로드: {cache_path}")
+        log_fn(f"[embed] Loading cache: {cache_path}")
         embs = torch.load(cache_path, map_location="cpu", weights_only=True)
-        log_fn(f"[embed] 로드 완료: {embs.shape}")
+        log_fn(f"[embed] Load complete: {embs.shape}")
         return embs
 
-    log_fn(f"[embed] corpus {len(corpus_texts):,}개 임베딩 시작 (batch={batch_size})...")
+    log_fn(f"[embed] Starting to embed {len(corpus_texts):,} corpus docs (batch={batch_size})...")
     all_embs = []
     pbar = tqdm(range(0, len(corpus_texts), batch_size),
                 desc="Embedding corpus", unit="batch", dynamic_ncols=True)
@@ -216,7 +217,7 @@ def build_or_load_corpus_embs(corpus_texts, cache_path, encoder_fn, log_fn, batc
         all_embs.append(encoder_fn(batch))
     corpus_embs = torch.cat(all_embs, dim=0)
     torch.save(corpus_embs, cache_path)
-    log_fn(f"[embed] 저장 완료: {cache_path}  shape={corpus_embs.shape}")
+    log_fn(f"[embed] Save complete: {cache_path}  shape={corpus_embs.shape}")
     return corpus_embs
 
 
@@ -225,7 +226,7 @@ def retrieve_fullcorpus_topk(query, adv_docs, corpus_embs_gpu, corpus_texts,
                               encode_fn, use_cosine, device, top_k,
                               q_prefix="", d_prefix="",
                               query_encode_fn=None, doc_encode_fn=None):
-    """adv_docs를 전체 corpus에 inject한 뒤 top-k 검색."""
+    """Injects adv_docs into the full corpus, then retrieves top-k."""
     query_encode_fn = query_encode_fn or encode_fn
     doc_encode_fn = doc_encode_fn or encode_fn
 
@@ -276,7 +277,7 @@ def load_clean_topn_cache(path, args, model_hf_name, log_fp):
     cache["query_to_row"] = {q: i for i, q in enumerate(queries)}
     cache["top_indices"] = cache["top_indices"].long()
     cache["top_scores"] = cache["top_scores"].float()
-    log(log_fp, f"[topn] clean top-{meta.get('top_n')} cache 로드: {path}")
+    log(log_fp, f"[topn] Loading clean top-{meta.get('top_n')} cache: {path}")
     log(log_fp, f"[topn] queries={len(queries):,} dtype={meta.get('score_dtype')} scorer={meta.get('scorer')}")
     return cache
 
@@ -286,7 +287,7 @@ def retrieve_cached_topn_topk(query, adv_docs, clean_topn_cache, corpus_texts,
                               q_prefix="", d_prefix="",
                               query_encode_fn=None, doc_encode_fn=None,
                               bm25_scorer=None):
-    """clean top-N cache와 adv_docs를 합쳐 top-k 검색."""
+    """Combines the clean top-N cache with adv_docs to retrieve top-k."""
     query_encode_fn = query_encode_fn or encode_fn
     doc_encode_fn = doc_encode_fn or encode_fn
 
@@ -340,8 +341,8 @@ def build_generator_prompt(model_name, question, docs):
 
 # ── RAGDefender ───────────────────────────────────────────────────────────────
 def find_num_adv_tfidf(text_list):
-    """RAGDefender Stage 1 TF-IDF veto (paper §2.3): top-5 TF-IDF 단어의 문서별 존재 여부로
-    다수결 투표해 악성 클러스터 크기 추정치를 보정한다."""
+    """RAGDefender Stage 1 TF-IDF veto (paper §2.3): takes a majority vote over each
+    document's presence/absence of the top-5 TF-IDF words to correct the estimated poison cluster size."""
     stop_words = list(sktext.ENGLISH_STOP_WORDS)
     tfidf = sktext.TfidfVectorizer(stop_words=stop_words)
     X = tfidf.fit_transform(text_list)
@@ -354,10 +355,11 @@ def find_num_adv_tfidf(text_list):
     return sum(final)
 
 def find_num_adv_agg_with_stage1(text_list, s_model):
-    """RAGDefender Φ (paper §2.3, clustering-based defense): retrieved top-k 문서를
-    2-cluster로 나눈 뒤(Agglomerative), find_num_adv_tfidf의 TF-IDF veto로 어느 클러스터가
-    악성인지·크기를 얼마로 볼지 보정한다. NQ/MS MARCO 경로에서 사용 — HotpotQA는 별도의
-    concentration-based grouping(eval/hotpotqa_multihop_ragdef_v2_eval.py)을 사용한다."""
+    """RAGDefender Phi (paper §2.3, clustering-based defense): splits the retrieved top-k
+    documents into 2 clusters (Agglomerative), then uses find_num_adv_tfidf's TF-IDF veto
+    to correct which cluster is the poison one and its estimated size. Used on the
+    NQ/MS MARCO path — HotpotQA uses separate concentration-based grouping
+    (eval/hotpotqa_multihop_ragdef_v2_eval.py) instead."""
     if len(text_list) < 2:
         return 0, set()
     embeddings = s_model.encode(text_list, convert_to_tensor=True)
@@ -370,7 +372,7 @@ def find_num_adv_agg_with_stage1(text_list, s_model):
     try:
         num_tfidf = find_num_adv_tfidf(text_list)
     except ValueError:
-        num_tfidf = 0  # 모든 문서가 불용어만 포함 시 fallback
+        num_tfidf = 0  # fallback for when every document contains only stop words
     if n1 > 0 and num_tfidf <= int(n / 2):
         n_adv = nmin
         adv_label = 1 if n1 <= n0 else 0
@@ -405,17 +407,17 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--dataset",          type=str, required=True, choices=["nq", "hotpotqa", "msmarco"])
     p.add_argument("--corpus_path",      type=str, default="",
-                   help="corpus.jsonl override. msmarco은 _DS_CFG에 로컬 기본 경로가 없어 필수 "
-                        "(corpus가 다른 서버에 있을 수 있음).")
+                   help="corpus.jsonl override. Required for msmarco since _DS_CFG has no local "
+                        "default for it (the corpus may live on a different server).")
     p.add_argument("--queries_jsonl",    type=str, default="",
-                   help="BEIR queries.jsonl override (msmarco 등 answers_json이 없는 데이터셋에 필요)")
+                   help="BEIR queries.jsonl override (needed for datasets like msmarco that lack answers_json)")
     p.add_argument("--qrels_paths",      type=str, nargs="+", default=[],
-                   help="qrels tsv 경로(들) override. msmarco은 필수.")
+                   help="qrels tsv path(s) override. Required for msmarco.")
     p.add_argument("--embed_cache_dir",  type=str, default="",
-                   help="corpus 임베딩 캐시 저장 디렉터리 override. msmarco은 필수.")
+                   help="Corpus embedding cache directory override. Required for msmarco.")
     p.add_argument("--retrieval_model",  type=str, default="contriever",
                    choices=list(_RETRIEVAL_ALIAS.keys()),
-                   help="retriever 종류 (default: contriever)")
+                   help="Retriever type (default: contriever)")
     p.add_argument("--docs_csv",         type=str, required=True)
     p.add_argument("--top_k",            type=int, default=5)
     p.add_argument("--adv_per_query",    type=int, default=4)
@@ -428,14 +430,15 @@ def main():
     p.add_argument("--embed_batch",      type=int, default=512)
     p.add_argument("--run_label",        type=str, default="")
     p.add_argument("--clean_topn_cache", type=str, default="",
-                   help="미리 계산한 clean corpus top-N cache(.pt). 있으면 full corpus scoring 대신 cache+adv 재랭킹")
+                   help="Precomputed clean corpus top-N cache (.pt). If present, uses cache+adv "
+                        "reranking instead of full-corpus scoring")
     p.add_argument("--defense_model",   type=str, default="minilm",
                    help="RAGDefender defense embedding model. Alias(minilm/mpnet/ance/bge/gte, "
-                        "Table 1·Supp Table 5의 matched/unseen 공간) 또는 임의의 SentenceTransformer ID.")
+                        "the matched/unseen spaces in Table 1/Supp Table 5) or any SentenceTransformer ID.")
     p.add_argument("--skip_nd",         action="store_true",
-                   help="ND(No-Defense) LLM 호출 생략 — RD-ASR만 측정할 때 속도 절반")
+                   help="Skip the No-Defense (ND) LLM call — halves runtime when only measuring RD-ASR")
     p.add_argument("--embed_only",       action="store_true",
-                   help="corpus 임베딩만 수행하고 eval 없이 종료")
+                   help="Only compute corpus embeddings and exit without evaluating")
     args = p.parse_args()
     args.defense_model = _DEFENSE_MODEL_ALIASES.get(args.defense_model, args.defense_model)
 
@@ -473,7 +476,7 @@ def main():
     log_fp, run_dir = setup_logger(cfg["log_subdir"])
 
     try:
-        # GPU 설정
+        # GPU configuration
         if "CUDA_VISIBLE_DEVICES" not in os.environ:
             os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
         nd = torch.cuda.device_count()
@@ -493,8 +496,8 @@ def main():
             "defense_model": args.defense_model,
         })
 
-        # ── Retriever 로딩 ────────────────────────────────────────────────────
-        log(log_fp, f"\n[load] retriever 로딩: {model_hf_name}")
+        # ── Load retriever ──────────────────────────────────────────────────
+        log(log_fp, f"\n[load] Loading retriever: {model_hf_name}")
         if is_contriever_family:
             ctv_tok = AutoTokenizer.from_pretrained(model_hf_name)
             ctv_mod = AutoModel.from_pretrained(model_hf_name,
@@ -506,7 +509,7 @@ def main():
 
             query_encode_fn = encode_fn
             doc_encode_fn = encode_fn
-            log(log_fp, f"[load] Contriever-family 완료 → {device}")
+            log(log_fp, f"[load] Contriever-family loaded -> {device}")
         elif is_bm25:
             encode_fn = None
             query_encode_fn = None
@@ -526,10 +529,10 @@ def main():
 
             query_encode_fn = encode_fn
             doc_encode_fn = encode_fn
-            log(log_fp, f"[load] SentenceTransformer 완료 → {device}")
+            log(log_fp, f"[load] SentenceTransformer loaded -> {device}")
 
-        # ── Corpus 로딩 & 임베딩 ──────────────────────────────────────────────
-        log(log_fp, f"\n[load] corpus 로딩: {cfg['corpus_path']}")
+        # ── Load corpus & embed ─────────────────────────────────────────────
+        log(log_fp, f"\n[load] Loading corpus: {cfg['corpus_path']}")
         corpus_ids, corpus_texts = [], []
         with open(cfg["corpus_path"]) as f:
             for line in f:
@@ -550,9 +553,9 @@ def main():
         bm25_scorer = None
         if args.clean_topn_cache:
             if args.embed_only:
-                raise ValueError("--embed_only와 --clean_topn_cache는 같이 사용할 수 없습니다.")
+                raise ValueError("--embed_only and --clean_topn_cache cannot be used together.")
             clean_topn_cache = load_clean_topn_cache(args.clean_topn_cache, args, model_hf_name, log_fp)
-            log(log_fp, "[embed] clean top-N cache 사용 → corpus embedding GPU 전송 생략")
+            log(log_fp, "[embed] Using clean top-N cache -> skipping corpus embedding GPU transfer")
             if is_bm25:
                 bm25_params_path = args.clean_topn_cache + ".bm25_params.pkl"
                 if not os.path.exists(bm25_params_path):
@@ -568,17 +571,17 @@ def main():
             )
 
             if args.embed_only:
-                log(log_fp, "[embed_only] 임베딩 완료. 종료.")
+                log(log_fp, "[embed_only] Embedding complete. Exiting.")
                 return
 
-            # GPU에 상주 (cosine 검색 시 미리 정규화, float16으로 메모리 절약 ~4GB)
-            log(log_fp, f"[embed] GPU 전송 중... ({corpus_embs.shape[0]:,} × {corpus_embs.shape[1]})")
+            # Kept resident on GPU (pre-normalized for cosine search, float16 saves ~4GB memory)
+            log(log_fp, f"[embed] Transferring to GPU... ({corpus_embs.shape[0]:,} x {corpus_embs.shape[1]})")
             if use_cosine:
                 corpus_embs = F.normalize(corpus_embs.float(), dim=-1)
             corpus_embs_gpu = corpus_embs.half().to(device)
-            log(log_fp, f"[embed] GPU 전송 완료. dtype=float16  GPU 메모리: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+            log(log_fp, f"[embed] GPU transfer complete. dtype=float16  GPU memory: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
-        # ── qrels 로딩 (golden 판별용) ────────────────────────────────────────
+        # ── Load qrels (for identifying golden docs) ───────────────────────
         qrels = {}
         for qrels_path in cfg["qrels_paths"]:
             with open(qrels_path) as f:
@@ -590,10 +593,10 @@ def main():
                         qrels.setdefault(qid, {})[pid] = int(parts[2])
         log(log_fp, f"[load] qrels: {len(qrels):,} queries")
 
-        # corpus_id → index 역매핑
+        # corpus_id -> index reverse mapping
         id_to_idx = {cid: i for i, cid in enumerate(corpus_ids)}
 
-        # ── query → beir_id 매핑 ─────────────────────────────────────────────
+        # ── query -> beir_id mapping ────────────────────────────────────────
         q_to_beir_id = {}
         if cfg.get("answers_json"):
             ia = load_json(cfg["answers_json"])
@@ -606,19 +609,19 @@ def main():
                     q_to_beir_id[d["text"].strip()] = d["_id"]
             log(log_fp, f"[load] HotpotQA q_to_beir_id: {len(q_to_beir_id):,}")
 
-        # ── Defense model 로딩 ────────────────────────────────────────────────
+        # ── Load defense model ──────────────────────────────────────────────
         log(log_fp, f"[load] RAGDefender defense model ({args.defense_model})...")
         defense_model = SentenceTransformer(args.defense_model, trust_remote_code=True)
-        log(log_fp, "[load] defense model 완료")
+        log(log_fp, "[load] defense model loaded")
 
-        # ── Generator 로딩: legacy BEIR path와 동일하게 create_model 사용 ─────
+        # ── Load generator: uses create_model, same as the legacy BEIR path ──
         log(log_fp, f"[load] LLM via create_model: {args.model_config_path}")
         llm = create_model(args.model_config_path)
         log(log_fp, f"[load] LLM: provider={llm.provider} | name={llm.name}")
 
         gc.collect(); torch.cuda.empty_cache()
 
-        # ── docs_csv 로딩 ─────────────────────────────────────────────────────
+        # ── Load docs_csv ───────────────────────────────────────────────────
         docs_df = pd.read_csv(args.docs_csv)
         log(log_fp, f"[load] docs_csv: {len(docs_df)} rows, cols={list(docs_df.columns)}")
 
@@ -632,7 +635,7 @@ def main():
             if not poison_docs:
                 skipped += 1
                 continue
-            # qrels는 있으면 golden 판별에 사용, 없어도 ASR 측정은 가능
+            # qrels, if present, are used to identify golden docs; ASR can still be measured without them
             beir_id = q_to_beir_id.get(q)
             golden_corpus_indices = set()
             if beir_id and beir_id in qrels:
@@ -648,7 +651,7 @@ def main():
 
         log(log_fp, f"[prep] {len(rows_data)} valid queries (skipped={skipped})")
         if not rows_data:
-            log(log_fp, "[ERROR] 유효 쿼리 없음. 종료.")
+            log(log_fp, "[ERROR] No valid queries. Exiting.")
             return
 
         # ── Main eval loop ────────────────────────────────────────────────────
@@ -671,7 +674,7 @@ def main():
             poison_docs = entry["poison_docs"][:args.adv_per_query]
             golden_idx  = entry["golden_idx"]
 
-            # ① Full-corpus retrieval (직접 scoring) 또는 clean top-N cache + adv 재랭킹
+            # (1) Full-corpus retrieval (direct scoring) or clean top-N cache + adv reranking
             if clean_topn_cache is not None:
                 retrieved_docs, adv_positions, poison_in_topk = retrieve_cached_topn_topk(
                     query=question,
@@ -711,13 +714,14 @@ def main():
             if has_poison:
                 total_queries_with_poison += 1
 
-            # golden 포함 여부 (retrieval recall)
+            # whether the golden doc is included (retrieval recall)
             golden_in_topk = 0
             if golden_idx:
-                # retrieved 중 실제 corpus 인덱스가 golden인지 확인
-                # (간략화: retrieved_docs 텍스트 vs corpus_texts 비교는 비효율적이므로
-                #  retrieve 함수가 반환한 top-k 인덱스로 직접 확인)
-                pass  # 아래에서 별도 추적
+                # Check whether any retrieved item's actual corpus index is the golden doc
+                # (simplification: comparing retrieved_docs text against corpus_texts is
+                #  inefficient, so this is checked directly via the top-k indices the
+                #  retrieve function returns)
+                pass  # tracked separately below
 
             # ② No-Defense
             if args.skip_nd:
@@ -788,7 +792,7 @@ def main():
         pbar.close()
         n = len(csv_rows)
 
-        # ── 결과 집계 ─────────────────────────────────────────────────────────
+        # ── Aggregate results ───────────────────────────────────────────────
         nd_rr = total_queries_with_poison / n if n else 0.0
         nd_rc = total_poison_in_topk / total_poison_injected if total_poison_injected else 0.0
         nd_pr = total_poison_in_topk / total_retrieved_docs  if total_retrieved_docs  else 0.0
@@ -828,23 +832,23 @@ def main():
         log(log_fp, f"\n{'='*60}")
         log(log_fp, f"  [Full-corpus eval] {args.dataset.upper()}  N={n}")
         log(log_fp, f"  corpus size: {n_corpus:,}")
-        log(log_fp, f"  {'지표':<35} {'값':>10}")
+        log(log_fp, f"  {'Metric':<35} {'Value':>10}")
         log(log_fp, f"  {'-'*45}")
         log(log_fp, f"  {'ND-ASR':<35} {nd_asr_cnt/n*100:>9.1f}%")
         log(log_fp, f"  {'RD-ASR':<35} {rd_asr_cnt/n*100:>9.1f}%")
         log(log_fp, f"  {'ND-Accuracy':<35} {nd_acc_cnt/n*100:>9.1f}%")
         log(log_fp, f"  {'RD-Accuracy':<35} {rd_acc_cnt/n*100:>9.1f}%")
-        log(log_fp, f"  {'Retrieval rate (쿼리 중 adv 포함률)':<35} {nd_rr*100:>9.1f}%")
-        log(log_fp, f"  {'[ND] Poison recall (top-k 내 adv 비율)':<35} {nd_rc*100:>9.1f}%")
+        log(log_fp, f"  {'Retrieval rate (fraction of queries with adv in top-k)':<35} {nd_rr*100:>9.1f}%")
+        log(log_fp, f"  {'[ND] Poison recall (fraction of top-k that is adv)':<35} {nd_rc*100:>9.1f}%")
         log(log_fp, f"  {'[ND] Poison precision':<35} {nd_pr*100:>9.1f}%")
         log(log_fp, f"  {'[ND] Poison F1':<35} {nd_f1*100:>9.1f}%")
-        log(log_fp, f"  {'[RD] Poison recall (방어 후 생존율)':<35} {rd_rc*100:>9.1f}%")
+        log(log_fp, f"  {'[RD] Poison recall (survival rate after defense)':<35} {rd_rc*100:>9.1f}%")
         log(log_fp, f"  {'[RD] Poison precision':<35} {rd_pr*100:>9.1f}%")
         log(log_fp, f"  {'[RD] Poison F1':<35} {rd_f1*100:>9.1f}%")
         log(log_fp, f"{'='*60}")
         log_json(log_fp, "FINAL_RESULTS", final_json)
 
-        # ── 저장 ─────────────────────────────────────────────────────────────
+        # ── Save ────────────────────────────────────────────────────────────
         label = args.run_label or Path(args.docs_csv).stem
         ts2 = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         csv_path  = os.path.join(run_dir, f"results_{label}_{ts2}.csv")
