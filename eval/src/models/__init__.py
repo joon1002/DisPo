@@ -8,8 +8,8 @@ def load_json(file_path):
 def create_model(config_path):
     """
     Factory method to create a LLM instance.
-    Provider별 import는 실제로 쓰는 provider만 로드하도록 지연 처리
-    (예: openai 패키지가 없는 환경에서도 vicuna는 문제없이 쓸 수 있어야 함).
+    Imports per provider are deferred so only the provider actually in use gets loaded
+    (e.g. vicuna must still work fine even in an environment without the openai package).
     """
     config = load_json(config_path)
 

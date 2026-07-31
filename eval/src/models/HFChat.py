@@ -4,7 +4,7 @@ from .Model import Model
 
 
 class HFChat(Model):
-    """HuggingFace chat template 기반 범용 생성기 (Qwen, Mistral 등)."""
+    """Generic generator based on the HuggingFace chat template (Qwen, Mistral, etc.)."""
 
     def __init__(self, config):
         super().__init__(config)

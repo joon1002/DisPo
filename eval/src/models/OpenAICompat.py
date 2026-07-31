@@ -1,12 +1,12 @@
 """OpenAI-compatible API wrapper.
 
-Gemini와 DeepSeek 모두 OpenAI-compatible 엔드포인트를 제공하므로
-openai 패키지 하나로 처리.
+Both Gemini and DeepSeek expose OpenAI-compatible endpoints, so a single
+openai package handles them.
 
 Config params:
-  base_url  : API endpoint (None이면 OpenAI 기본값)
+  base_url  : API endpoint (None uses the OpenAI default)
   api_key   : api_key_info.api_keys[api_key_use]
-  gpus      : [] 로 설정 (API 모델은 GPU 불필요)
+  gpus      : set to [] (API models don't need a GPU)
 """
 from openai import OpenAI
 from .Model import Model
