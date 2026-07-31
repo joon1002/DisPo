@@ -1,8 +1,8 @@
 """
 dipoison_ragdef_robustrag_eval.py
-dipoison4_nq100.csv (원본) 대상:
-  ND-ASR : Contriever top-5 → standard Mistral-7B
-  RD-ASR : Contriever top-5 → RAGDefender filter → RobustRAG Mistral-7B
+For dipoison4_nq100.csv (original):
+  ND-ASR : Contriever top-5 -> standard Mistral-7B
+  RD-ASR : Contriever top-5 -> RAGDefender filter -> RobustRAG Mistral-7B
 """
 
 import warnings
