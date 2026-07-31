@@ -87,7 +87,7 @@ DiPoison/
 | Table 3 — Cross-retriever transfer | `scripts/merge_dipoison_cont_e5_n7.py` (merge Contriever+E5 poison sets), `eval/multi_retriever_ragdef_eval.py` (NQ/MS MARCO), `eval/hotpotqa_merged_multihop_8ret_eval.py` (HotpotQA) |
 | Table 4 — Cross-generator transfer | `eval/gen_asr_eval.py` |
 | Table 5 — Cross-dataset transfer | `eval/main_dipoison_fullcorpus_ragdef.py --dataset {nq,msmarco}`, `eval/hotpotqa_ragdef_eval.py`, `eval/hotpotqa_multihop_ragdef_v2_eval.py` (HotpotQA multihop defense) |
-| §4.4 — Training-query-count ablation | `eval/plot_q_ablation.py` |
+| §4.4 — Training-query-count ablation | Train at each query count with `scripts/train_grpo_poison.py --input <100/200/300/500/800-query CSV>`, then evaluate each with `eval/main_dipoison_fullcorpus_ragdef.py` (no separate plotting code is included) |
 | §4.4 — Untargeted-query utility / collateral damage | `eval/clean_acc_eval.py`, `eval/clean_acc_fullcorpus300.py`, `eval/collateral_damage_eval.py`, `eval/hotpotqa_clean_acc_200.py`, `eval/hotpotqa_collateral_acc_eval.py` |
 | Table 6 — Multi-objective reward ablation | `scripts/ablation/` (see `scripts/ablation/README.md` for the `--ablation` <-> table-row mapping), PPL column via `eval/measure_objective_ablation_ppl_gpt2xl.py` |
 
