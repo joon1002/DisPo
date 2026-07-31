@@ -264,12 +264,12 @@ def _cache_path_for(dataset_cfg, model_hf_name):
 
 def build_or_load_corpus_embs(corpus_texts, cache_path, encoder_fn, log_fn, batch_size=512):
     if os.path.exists(cache_path):
-        log_fn(f"[embed] 캐시 로드: {cache_path}")
+        log_fn(f"[embed] Loading cache: {cache_path}")
         embs = torch.load(cache_path, map_location="cpu", weights_only=True)
-        log_fn(f"[embed] 로드 완료: {embs.shape}")
+        log_fn(f"[embed] Load complete: {embs.shape}")
         return embs
 
-    log_fn(f"[embed] corpus {len(corpus_texts):,}개 임베딩 시작 (batch={batch_size})...")
+    log_fn(f"[embed] Starting to embed {len(corpus_texts):,} corpus docs (batch={batch_size})...")
     all_embs = []
     pbar = tqdm(range(0, len(corpus_texts), batch_size),
                 desc="Embedding corpus", unit="batch", dynamic_ncols=True)
@@ -278,7 +278,7 @@ def build_or_load_corpus_embs(corpus_texts, cache_path, encoder_fn, log_fn, batc
         all_embs.append(encoder_fn(batch))
     corpus_embs = torch.cat(all_embs, dim=0)
     torch.save(corpus_embs, cache_path)
-    log_fn(f"[embed] 저장 완료: {cache_path}  shape={corpus_embs.shape}")
+    log_fn(f"[embed] Save complete: {cache_path}  shape={corpus_embs.shape}")
     return corpus_embs
 
 
@@ -351,14 +351,14 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--dataset",           type=str, default="nq", choices=["nq", "msmarco"])
     p.add_argument("--corpus_path",       type=str, default="",
-                   help="corpus.jsonl override. msmarco은 _DS_CFG에 로컬 기본 경로가 없어 필수 "
-                        "(corpus가 다른 서버에 있을 수 있음).")
+                   help="corpus.jsonl override. Required for msmarco since _DS_CFG has no local "
+                        "default for it (the corpus may live on a different server).")
     p.add_argument("--queries_jsonl",     type=str, default="",
-                   help="BEIR queries.jsonl override (msmarco 등 answers_json이 없는 데이터셋에 필요)")
+                   help="BEIR queries.jsonl override (needed for datasets like msmarco that lack answers_json)")
     p.add_argument("--qrels_paths",       type=str, nargs="+", default=[],
-                   help="qrels tsv 경로(들) override. msmarco은 필수.")
+                   help="qrels tsv path(s) override. Required for msmarco.")
     p.add_argument("--embed_cache_dir",   type=str, default="",
-                   help="corpus 임베딩 캐시 저장 디렉터리 override. msmarco은 필수.")
+                   help="Corpus embedding cache directory override. Required for msmarco.")
     p.add_argument("--retrieval_model",   type=str, default="contriever",
                    choices=list(_RETRIEVAL_ALIAS.keys()))
     p.add_argument("--docs_csv",          type=str, required=True)
@@ -450,7 +450,7 @@ def main():
                     ).cpu()
 
             query_encode_fn = doc_encode_fn = encode_fn
-        log(log_fp, f"[load] retriever 완료 → {device}")
+        log(log_fp, f"[load] Retriever loaded -> {device}")
 
         # ── Corpus ────────────────────────────────────────────────────────────
         log(log_fp, f"\n[load] corpus: {cfg['corpus_path']}")
@@ -472,11 +472,11 @@ def main():
             corpus_texts, cache_path, corpus_encoder_fn,
             lambda m: log(log_fp, m), batch_size=args.embed_batch,
         )
-        log(log_fp, f"[embed] GPU 전송 중... ({corpus_embs.shape[0]:,} × {corpus_embs.shape[1]})")
+        log(log_fp, f"[embed] Transferring to GPU... ({corpus_embs.shape[0]:,} x {corpus_embs.shape[1]})")
         if use_cosine:
             corpus_embs = F.normalize(corpus_embs.float(), dim=-1)
         corpus_embs_gpu = corpus_embs.half().to(device)
-        log(log_fp, f"[embed] GPU 전송 완료. GPU mem: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+        log(log_fp, f"[embed] GPU transfer complete. GPU mem: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
         # ── qrels & query mapping ─────────────────────────────────────────────
         qrels = {}
@@ -611,7 +611,7 @@ def main():
         pbar.close()
         n = len(csv_rows)
 
-        # ── 결과 집계 ─────────────────────────────────────────────────────────
+        # ── Aggregate results ───────────────────────────────────────────────
         nd_rr  = total_queries_with_poison / n if n else 0.0
         nd_rec = total_poison_in_topk / total_poison_injected if total_poison_injected else 0.0
         nd_pr  = total_poison_in_topk / (n * args.top_k) if n else 0.0
