@@ -2,8 +2,8 @@
 """
 infer_abl_checkpoint.py
 
-abl final_model에서 nq100_validate 100개 쿼리에 대해 poison docs 생성.
---ablation 인자로 훈련 시 사용한 ablation 모드를 지정해야 함 (UW 로드 시 n_tasks 맞춤).
+Generates poison docs for the 100 nq100_validate queries from the abl final_model.
+The --ablation argument must match the ablation mode used during training (so the loaded UW's n_tasks matches).
 
 Usage:
   CUDA_VISIBLE_DEVICES=0 /path/to/DiPoison/.venv/bin/python \\
@@ -16,9 +16,9 @@ Usage:
 import argparse, json, os, re, sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# scripts/ablation/inference/ 에 위치 → repo root까지 3단계 위
+# Located at scripts/ablation/inference/ -> repo root is 3 levels up
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR)))
-# train_grpo_poison_abl.py는 형제 폴더 scripts/ablation/train/ 에 있음
+# train_grpo_poison_abl.py lives in the sibling folder scripts/ablation/train/
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "scripts", "ablation", "train"))
 
 import pandas as pd
@@ -73,11 +73,11 @@ def parse_args():
     p.add_argument("--gpu_id",      type=int, default=0)
     p.add_argument("--group_size",  type=int, default=8)
     p.add_argument("--gen_batch_size", type=int, default=4,
-                   help="한 번의 generate 호출에서 샘플링할 후보 수. 기본 4로 G=8 후보를 두 번에 나누어 생성.")
+                   help="Number of candidates sampled per generate() call. Default 4 splits G=8 candidates across two calls.")
     p.add_argument("--num_adv_docs", type=int, default=tgp_abl.DEFAULT_NUM_ADV_DOCS,
-                   help="seed 제외 추가 생성 문서 수. 기본 3 -> 총 N=4. --N 지정 시 무시됨")
+                   help="Number of generated documents excluding the seed. Default 3 -> N=4 total. Ignored if --N is set")
     p.add_argument("--N", type=int, default=None,
-                   help="seed 포함 총 악성문서 수. 예: --N 4 -> doc0_seed+doc1~doc3")
+                   help="Total poison documents including the seed. e.g. --N 4 -> doc0_seed+doc1~doc3")
     return p.parse_args()
 
 def main():
@@ -139,7 +139,7 @@ def main():
     print("[tfidf] Vectorizer fitted")
 
     print(f"[cfg] G={args.group_size}, gen_batch_size={args.gen_batch_size}, "
-          f"N={args.num_adv_docs + 1} (seed 포함)")
+          f"N={args.num_adv_docs + 1} (including seed)")
     out_df = tgp_abl.infer_poison_docs(
         model=model,
         tokenizer=tokenizer,
