@@ -14,7 +14,7 @@ TrustRAG (Zhou et al., 2025 / github.com/HuichiZhou/TrustRAG) 방어:
     스스로 판단시켜 답변 생성.
 
 Usage (NQ, contriever, top-5):
-  CUDA_VISIBLE_DEVICES=0 DIPOISON_DATA_ROOT=/data1/joonhyung HF_HUB_DISABLE_XET=1 \\
+  CUDA_VISIBLE_DEVICES=0 DIPOISON_DATA_ROOT=/path/to HF_HUB_DISABLE_XET=1 \\
   python eval/main_dipoison_fullcorpus_trustrag.py \\
     --dataset nq --retrieval_model contriever \\
     --docs_csv ../data/attackbaselines_pd/DiPoison/nq/dipoison4_nq100.csv \\
@@ -53,8 +53,8 @@ from src.prompts import wrap_prompt as legacy_wrap_prompt
 from src.prompts import wrap_prompt_llama as legacy_wrap_prompt_llama
 
 # 서버마다 대용량 데이터 저장 위치가 다를 수 있어 환경변수로 override 가능
-# (예: export DIPOISON_DATA_ROOT=/data1/joonhyung)
-_DATA_ROOT = os.environ.get("DIPOISON_DATA_ROOT", "/data/joonhyung")
+# (예: export DIPOISON_DATA_ROOT=/path/to)
+_DATA_ROOT = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
 
 # ── Dataset 설정 ──────────────────────────────────────────────────────────────
 _DS_CFG = {

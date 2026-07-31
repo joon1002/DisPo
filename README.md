@@ -114,7 +114,7 @@ pip install fschat==0.2.36
 
 **NQ** (2.68M passages, ~1.5GB)
 ```bash
-mkdir -p /data/joonhyung/datasets/nq && cd /data/joonhyung/datasets/nq
+mkdir -p /path/to/datasets/nq && cd /path/to/datasets/nq
 wget https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/nq.zip
 unzip nq.zip
 mv nq/corpus.jsonl nq/queries.jsonl nq/qrels .
@@ -123,14 +123,14 @@ rm -rf nq nq.zip
 
 **HotpotQA** (5.23M passages, ~2.2GB)
 ```bash
-mkdir -p /data/joonhyung/datasets/hotpotqa && cd /data/joonhyung/datasets/hotpotqa
+mkdir -p /path/to/datasets/hotpotqa && cd /path/to/datasets/hotpotqa
 wget https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/hotpotqa.zip
 unzip hotpotqa.zip
 mv hotpotqa/corpus.jsonl hotpotqa/queries.jsonl hotpotqa/qrels .
 rm -rf hotpotqa hotpotqa.zip
 ```
 
-> `eval/main_dipoison_fullcorpus_ragdef.py`의 `_DS_CFG`에 경로가 `/data/joonhyung/datasets/{nq,hotpotqa}/`로 고정되어 있으므로 반드시 이 경로에 둬야 합니다.
+> `eval/main_dipoison_fullcorpus_ragdef.py`의 `_DS_CFG`에 경로가 `/path/to/datasets/{nq,hotpotqa}/`로 고정되어 있으므로 반드시 이 경로에 둬야 합니다.
 
 ---
 

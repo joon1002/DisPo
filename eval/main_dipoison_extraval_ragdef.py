@@ -42,13 +42,13 @@ from tqdm import tqdm
 
 _ROOT = Path(__file__).resolve().parent
 _NQ_JSON_PATH   = str(_ROOT.parent / "data/eval/nq.json")
-_NQ_CORPUS_PATH = "/data/joonhyung/datasets/nq/corpus.jsonl"
-_NQ_QRELS_PATH  = "/data/joonhyung/datasets/nq/qrels/test.tsv"
+_NQ_CORPUS_PATH = "/path/to/datasets/nq/corpus.jsonl"
+_NQ_QRELS_PATH  = "/path/to/datasets/nq/qrels/test.tsv"
 _AUX_CSV_PATH   = str(_ROOT.parent / "data/nq_500_pd_7b.csv")
 _VICUNA_MODEL   = "lmsys/vicuna-7b-v1.3"
-_MISTRAL_MODEL  = "/data/seonhye/hf_home/hub/models--mistralai--Mistral-7B-Instruct-v0.3/snapshots/c170c708c41dac9275d15a8fff4eca08d52bab71"
-_LLAMA3_MODEL   = "/data/seonhye/hf_models/models--meta-llama--Meta-Llama-3-8B-Instruct/snapshots/8afb486c1db24fe5011ec46dfbe5b5dccdb575c2"
-_QWEN25_MODEL   = "/data/seonhye/hf_models/models--Qwen--Qwen2.5-7B-Instruct/snapshots/a09a35458c702b33eeacc393d103063234e8bc28"
+_MISTRAL_MODEL  = "mistralai/Mistral-7B-Instruct-v0.3"
+_LLAMA3_MODEL   = "meta-llama/Meta-Llama-3-8B-Instruct"
+_QWEN25_MODEL   = "Qwen/Qwen2.5-7B-Instruct"
 
 # ── 인라인 유틸 ──────────────────────────────────────────────────────────────
 def setup_seeds(seed):
@@ -129,7 +129,7 @@ class _FastchatVicuna:
             from fastchat.model import load_model, get_conversation_template
             self._get_conv = get_conversation_template
         except ImportError:
-            raise ImportError("fastchat not installed. Use ragatt venv: /data/joonhyung/ragatt/.venv")
+            raise ImportError("fastchat not installed. Use ragatt venv: /path/to/ragatt/.venv")
         self._model, self._tok = load_model(
             model_path=_VICUNA_MODEL,
             device="cuda",
