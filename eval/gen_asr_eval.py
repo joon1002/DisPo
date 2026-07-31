@@ -1,9 +1,9 @@
 """
 gen_asr_eval.py
 
-Contriever 검색기 + 파라미터화된 generator로 ND-ASR / RD-ASR 측정.
-지원 generator: Mistral-7B-Instruct-v0.3, Meta-Llama-3-8B-Instruct, Qwen2.5-7B-Instruct
-(apply_chat_template 사용 → 각 모델 포맷 자동 처리)
+Measures ND-ASR / RD-ASR with the Contriever retriever + a parameterized generator.
+Supported generators: Mistral-7B-Instruct-v0.3, Meta-Llama-3-8B-Instruct, Qwen2.5-7B-Instruct
+(uses apply_chat_template -> each model's format is handled automatically)
 
 Usage:
   cd eval/
@@ -34,9 +34,9 @@ p.add_argument("--corpus",       default="../data/corpus.jsonl")
 p.add_argument("--qrels_dir",    default="../data/eval/qrels")
 p.add_argument("--answers_json", default="../data/eval/nq.json")
 p.add_argument("--input_csv",    default=None,
-               help="원본 validate CSV (beir_title 컬럼). v2~v4 쿼리 normal docs 조회용.")
+               help="Original validate CSV (beir_title column). Used to look up normal docs for v2~v4 queries.")
 p.add_argument("--generator",    required=True,
-               help="generator 모델 경로 또는 HF ID")
+               help="Generator model path or HF ID")
 p.add_argument("--gpu_id",       type=int, default=0)
 p.add_argument("--ret_top_k",    type=int, default=5)
 p.add_argument("--ret_top_n",    type=int, default=20)
@@ -169,7 +169,7 @@ def generate_answer(question, ctx_list):
         )
     return gen_tok.decode(out[0][ids.shape[1]:], skip_special_tokens=True).strip()
 
-# ─── RAGDefender 유틸 ────────────────────────────────────────
+# ─── RAGDefender utilities ──────────────────────────────────
 def _ragdef_tfidf_count(docs):
     stop_words = list(sktext.ENGLISH_STOP_WORDS)
     try:
@@ -203,7 +203,7 @@ def ragdefender_filter(docs, s_model, top_k):
     clean_docs = [doc for doc, lbl in zip(docs, labels) if lbl != poison_label]
     return clean_docs[:top_k] if clean_docs else docs[:top_k]
 
-# ─── 쿼리 데이터 구성 ────────────────────────────────────────
+# ─── Build query data ───────────────────────────────────────
 query_data = []
 for _, row in docs_df.iterrows():
     query = str(row["query"]).strip()
@@ -219,7 +219,7 @@ for _, row in docs_df.iterrows():
 N = len(query_data)
 print(f"[prep] {N} valid queries")
 
-# ─── No-Defense 평가 ─────────────────────────────────────────
+# ─── No-Defense evaluation ──────────────────────────────────
 print(f"\n[eval] No-Defense: Contriever top-{args.ret_top_k} → {gen_name}")
 nd_asr = 0
 nd_top20_cache = []
@@ -234,7 +234,7 @@ for entry in tqdm(query_data, desc="ND", ncols=90):
 
 gc.collect(); torch.cuda.empty_cache()
 
-# ─── RAGDefender 평가 ────────────────────────────────────────
+# ─── RAGDefender evaluation ─────────────────────────────────
 print(f"\n[eval] RAGDefender: top-{args.ret_top_n} → MiniLM clustering → top-{args.ret_top_k} → {gen_name}")
 rd_s_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 rd_s_model.to(DEVICE)
@@ -248,16 +248,16 @@ for i, entry in enumerate(tqdm(query_data, desc="RD", ncols=90)):
 del rd_s_model
 gc.collect(); torch.cuda.empty_cache()
 
-# ─── 결과 출력 ───────────────────────────────────────────────
+# ─── Print results ──────────────────────────────────────────
 W = 66
 csv_name = Path(args.docs_csv).name
 print(f"\n{'='*W}")
-print(f"  평가 결과: {csv_name}  |  generator: {gen_name}  (N={N})")
-print(f"  {'지표':<20}  {'값':>8}")
+print(f"  Evaluation result: {csv_name}  |  generator: {gen_name}  (N={N})")
+print(f"  {'Metric':<20}  {'Value':>8}")
 print(f"  {'-'*40}")
 print(f"  {'nd-asr':<20}  {nd_asr/N*100:>7.1f}%")
 print(f"  {'rd-asr':<20}  {rd_asr/N*100:>7.1f}%")
 print(f"{'='*W}")
-print(f"\n  ※ nd-asr: Contriever top-5, no-defense 상태에서 target answer 생성율")
-print(f"  ※ rd-asr: RAGDefender(MiniLM clustering) 방어 후 ASR")
+print(f"\n  * nd-asr: rate at which the target answer is generated with Contriever top-5, no defense")
+print(f"  * rd-asr: ASR after the RAGDefender (MiniLM clustering) defense")
 print(f"{'='*W}")
