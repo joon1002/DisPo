@@ -413,7 +413,16 @@ def log_json(fp, title, data):
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--dataset",          type=str, required=True, choices=["nq", "hotpotqa"])
+    p.add_argument("--dataset",          type=str, required=True, choices=["nq", "hotpotqa", "msmarco"])
+    p.add_argument("--corpus_path",      type=str, default="",
+                   help="corpus.jsonl override. msmarco은 _DS_CFG에 로컬 기본 경로가 없어 필수 "
+                        "(corpus가 다른 서버에 있을 수 있음).")
+    p.add_argument("--queries_jsonl",    type=str, default="",
+                   help="BEIR queries.jsonl override (msmarco 등 answers_json이 없는 데이터셋에 필요)")
+    p.add_argument("--qrels_paths",      type=str, nargs="+", default=[],
+                   help="qrels tsv 경로(들) override. msmarco은 필수.")
+    p.add_argument("--embed_cache_dir",  type=str, default="",
+                   help="corpus 임베딩 캐시 저장 디렉터리 override. msmarco은 필수.")
     p.add_argument("--retrieval_model",  type=str, default="contriever",
                    choices=list(_RETRIEVAL_ALIAS.keys()),
                    help="retriever 종류 (default: contriever)")
@@ -451,7 +460,30 @@ def main():
     q_prefix = _QUERY_PREFIXES.get(model_hf_name, "")
     d_prefix = _DOC_PREFIXES.get(model_hf_name, "")
 
-    cfg = _DS_CFG[args.dataset]
+    cfg = dict(_DS_CFG.get(args.dataset, {}))
+    if args.corpus_path:
+        cfg["corpus_path"] = args.corpus_path
+    if args.queries_jsonl:
+        cfg["queries_jsonl"] = args.queries_jsonl
+    if args.qrels_paths:
+        cfg["qrels_paths"] = args.qrels_paths
+    if args.embed_cache_dir:
+        cfg["embed_cache_dir"] = args.embed_cache_dir
+    cfg.setdefault("answers_json", None)
+    cfg.setdefault("log_subdir", f"txt_logs_fullcorpus_{args.dataset}")
+    _required = ["corpus_path", "qrels_paths", "embed_cache_dir"]
+    _missing = [k for k in _required if not cfg.get(k)]
+    if _missing:
+        raise ValueError(
+            f"--dataset {args.dataset} has no local default for {_missing} "
+            f"(no local default configured for this dataset) — pass "
+            "--corpus_path/--qrels_paths/--embed_cache_dir explicitly"
+        )
+    if not cfg.get("queries_jsonl") and not cfg.get("answers_json"):
+        raise ValueError(
+            f"--dataset {args.dataset} needs either --queries_jsonl (BEIR-style) "
+            "or a configured answers_json to map queries to BEIR ids"
+        )
     log_fp, run_dir = setup_logger(cfg["log_subdir"])
 
     try:
@@ -598,11 +630,11 @@ def main():
 
         # ── query → beir_id 매핑 ─────────────────────────────────────────────
         q_to_beir_id = {}
-        if args.dataset == "nq":
+        if cfg.get("answers_json"):
             ia = load_json(cfg["answers_json"])
             q_to_beir_id = {x["question"].strip(): x["id"] for x in ia}
-            log(log_fp, f"[load] NQ q_to_beir_id: {len(q_to_beir_id):,}")
-        else:  # hotpotqa
+            log(log_fp, f"[load] {args.dataset} q_to_beir_id (answers_json): {len(q_to_beir_id):,}")
+        else:  # hotpotqa / msmarco: BEIR queries.jsonl
             with open(cfg["queries_jsonl"]) as f:
                 for line in f:
                     d = json.loads(line)
