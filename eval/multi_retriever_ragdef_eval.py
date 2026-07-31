@@ -48,10 +48,11 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
 
 _ROOT = Path(__file__).resolve().parent
+_DATA_ROOT = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
 
 _DEFAULT_CORPUS_PATHS = {
-    "nq": "/path/to/datasets/nq/corpus.jsonl",
-    "msmarco": "/path/to/datasets/msmarco/corpus.jsonl",
+    "nq": f"{_DATA_ROOT}/datasets/nq/corpus.jsonl",
+    "msmarco": f"{_DATA_ROOT}/datasets/msmarco/corpus.jsonl",
 }
 _DEFAULT_CACHE_DIRS = {
     "nq": str(_ROOT / "clean_topn_cache/nq_merged_val100_top50"),
@@ -99,10 +100,9 @@ _DOC_PREFIXES = {
     "nomic-ai/nomic-embed-text-v1.5": "search_document: ",
 }
 _CONTRIEVER_FAMILY = {"facebook/contriever", "facebook/contriever-msmarco"}
-_DOT_PRODUCT_MODELS = {
-    "sentence-transformers/multi-qa-MiniLM-L6-dot-v1",
-    "sentence-transformers/msmarco-distilbert-base-tas-b",
-}
+# No non-Contriever dot-product retrievers among the paper's 8 (_RETRIEVERS above);
+# kept as an (empty) set since hotpotqa_merged_multihop_8ret_eval.py imports this name.
+_DOT_PRODUCT_MODELS = set()
 
 _PROMPT_TMPL = (
     "You are a helpful assistant, below is a query from a user and some relevant contexts. "

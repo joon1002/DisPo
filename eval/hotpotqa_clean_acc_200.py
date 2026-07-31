@@ -27,12 +27,13 @@ from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
 
-_ROOT = Path(__file__).resolve().parent
+_ROOT = Path(__file__).resolve().parent.parent
+_DATA_ROOT = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
 
-_CORPUS_PATH   = "/path/to/datasets/hotpotqa/corpus.jsonl"
-_QUERIES_PATH  = "/path/to/datasets/hotpotqa/queries.jsonl"
-_EMB_CACHE     = "/path/to/datasets/hotpotqa/contriever_embs_fullcorpus.pt"
-_VAL100_CSV    = "/path/to/DiPoison/data/hotpotqa_val100origin.csv"
+_CORPUS_PATH   = f"{_DATA_ROOT}/datasets/hotpotqa/corpus.jsonl"
+_QUERIES_PATH  = f"{_DATA_ROOT}/datasets/hotpotqa/queries.jsonl"
+_EMB_CACHE     = f"{_DATA_ROOT}/datasets/hotpotqa/contriever_embs_fullcorpus.pt"
+_VAL100_CSV    = str(_ROOT / "data/hotpotqa_val100origin.csv")
 _VICUNA_MODEL  = "lmsys/vicuna-7b-v1.3"
 _CONTRIEVER_HF = "facebook/contriever"
 
@@ -121,7 +122,7 @@ def main():
     parser.add_argument("--gpu_id",      type=int, default=0)
     parser.add_argument("--top_k",       type=int, default=5)
     parser.add_argument("--out_dir",     type=str,
-                        default="/path/to/DiPoison/eval/results/hotpotqa_clean_acc_200")
+                        default=str(_ROOT / "eval/results/hotpotqa_clean_acc_200"))
     parser.add_argument("--n_queries",   type=int, default=200)
     parser.add_argument("--seed",        type=int, default=42)
     parser.add_argument("--exclude_csv", type=str, default="",

@@ -41,9 +41,10 @@ from sentence_transformers import SentenceTransformer, util as st_util
 from tqdm import tqdm
 
 _ROOT = Path(__file__).resolve().parent
+_DATA_ROOT = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
 _NQ_JSON_PATH   = str(_ROOT.parent / "data/eval/nq.json")
-_NQ_CORPUS_PATH = "/path/to/datasets/nq/corpus.jsonl"
-_NQ_QRELS_PATH  = "/path/to/datasets/nq/qrels/test.tsv"
+_NQ_CORPUS_PATH = f"{_DATA_ROOT}/datasets/nq/corpus.jsonl"
+_NQ_QRELS_PATH  = f"{_DATA_ROOT}/datasets/nq/qrels/test.tsv"
 _AUX_CSV_PATH   = str(_ROOT.parent / "data/nq_train_validate/nq_500_pd_7b.csv")
 _VICUNA_MODEL   = "lmsys/vicuna-7b-v1.3"
 _MISTRAL_MODEL  = "mistralai/Mistral-7B-Instruct-v0.3"
@@ -199,11 +200,9 @@ class _DirectHFLLM:
 _RETRIEVER_MAP = {
     "contriever":         ("facebook/contriever",                                           "contriever"),
     "contriever-msmarco": ("facebook/contriever-msmarco",                                   "contriever"),
-    "dpr":                ("sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base", "st"),
     "mpnet":              ("sentence-transformers/all-mpnet-base-v2",                       "st"),
     "e5-base":            ("intfloat/e5-base-v2",                                           "st"),
     "ance":               ("sentence-transformers/msmarco-roberta-base-ance-firstp",        "st"),
-    "gte-base":           ("thenlper/gte-base",                                             "st"),
     "bge-base":           ("BAAI/bge-base-en-v1.5",                                        "st"),
 }
 _E5_Q_PREF  = "query: ";    _E5_D_PREF  = "passage: "
@@ -339,7 +338,7 @@ def parse_args():
     p.add_argument("--gpu_id",          type=int, default=0)
     p.add_argument("--defense_model",    type=str, default="paraphrase-MiniLM-L6-v2")
     p.add_argument("--retrieval_model",  type=str, default="contriever",
-                   help="contriever | contriever-msmarco | dpr | mpnet | e5-base | ance | gte-base | bge-base")
+                   help="contriever | contriever-msmarco | mpnet | e5-base | ance | bge-base")
     p.add_argument("--run_label",        type=str, default="")
     p.add_argument("--llm_model",        type=str, default="vicuna",
                    choices=["vicuna", "mistral", "llama3", "qwen2.5"])

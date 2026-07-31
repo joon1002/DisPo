@@ -37,6 +37,7 @@ from tqdm import tqdm
 from transformers import AutoModel, AutoModelForCausalLM, AutoTokenizer
 
 _ROOT          = Path(__file__).resolve().parent.parent
+_DATA_ROOT     = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
 _VICUNA_MODEL  = "lmsys/vicuna-7b-v1.3"
 _MISTRAL_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
 _LLAMA3_MODEL  = "meta-llama/Meta-Llama-3-8B-Instruct"
@@ -80,9 +81,9 @@ _PROMPT_TMPL = (
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--corpus_path", default="/path/to/datasets/hotpotqa/corpus.jsonl",
+    parser.add_argument("--corpus_path", default=f"{_DATA_ROOT}/datasets/hotpotqa/corpus.jsonl",
                         help="HotpotQA corpus.jsonl 경로")
-    parser.add_argument("--emb_cache", default="/path/to/datasets/hotpotqa/contriever_embs_fullcorpus.pt",
+    parser.add_argument("--emb_cache", default=f"{_DATA_ROOT}/datasets/hotpotqa/contriever_embs_fullcorpus.pt",
                         help="Contriever full-corpus 임베딩 캐시 .pt 경로")
     parser.add_argument("--gpu_id", type=int, default=0,
                         help="CUDA_VISIBLE_DEVICES로 노출된 GPU 내부 인덱스 (기본 0)")

@@ -30,6 +30,8 @@ from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
 
 _EVAL_ROOT = Path(__file__).resolve().parent
+_ROOT = _EVAL_ROOT.parent
+_DATA_ROOT = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
 if str(_EVAL_ROOT) not in sys.path:
     sys.path.insert(0, str(_EVAL_ROOT))
 
@@ -45,11 +47,11 @@ from main_dipoison_fullcorpus_ragdef import contriever_encode  # noqa: E402
 
 
 ATTACKS = {
-    "PoisonedRAG": "/path/to/DiPoison/data/attackbaselines_pd/PoisonedRAG/hotpotqa/poisonedrag4_hotpot100.csv",
-    "Joint-GCG": "/path/to/DiPoison/data/attackbaselines_pd/jointgcg/hotpotqa/hotpotqa_origin_jointgcg_v2_n4.csv",
-    "Confundo": "/path/to/DiPoison/data/attackbaselines_pd/confundo/hotpotqa/confundo_hotpotqa_N4.csv",
-    "RAGParadox": "/path/to/DiPoison/data/attackbaselines_pd/RAGParadox/hotpotqa/hotpotqa_ragparadox_n4.csv",
-    "DiPoison": "/path/to/DiPoison/data/attackbaselines_pd/DiPoison/hotpotqa/dipoison4_hotpot100.csv",
+    "PoisonedRAG": str(_ROOT / "data/attackbaselines_pd/PoisonedRAG/hotpotqa/poisonedrag4_hotpot100.csv"),
+    "Joint-GCG": str(_ROOT / "data/attackbaselines_pd/jointgcg/hotpotqa/hotpotqa_origin_jointgcg_v2_n4.csv"),
+    "Confundo": str(_ROOT / "data/attackbaselines_pd/confundo/hotpotqa/confundo_hotpotqa_N4.csv"),
+    "RAGParadox": str(_ROOT / "data/attackbaselines_pd/RAGParadox/hotpotqa/hotpotqa_ragparadox_n4.csv"),
+    "DiPoison": str(_ROOT / "data/attackbaselines_pd/DiPoison/hotpotqa/dipoison4_hotpot100.csv"),
 }
 
 _ISOLATION_PROMPT = (
@@ -141,10 +143,10 @@ def robustrag_keyword_agg(question, topk_docs, llm, alpha=0.3, beta=3, abstentio
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--corpus_path", default="/path/to/datasets/hotpotqa/corpus.jsonl")
-    p.add_argument("--clean_topn_cache", default="/path/to/DiPoison/eval/clean_topn_cache/hotpotqa_5attacks_top50/contriever_top50.pt")
-    p.add_argument("--output_dir", default="/path/to/DiPoison/eval/results/hotpotqa_mistral_robustrag_multihop_ragdef")
-    p.add_argument("--substring_dir", default="/path/to/nq/results/eval_csv/substring_result/hotpotragparadox")
+    p.add_argument("--corpus_path", default=f"{_DATA_ROOT}/datasets/hotpotqa/corpus.jsonl")
+    p.add_argument("--clean_topn_cache", default=str(_EVAL_ROOT / "clean_topn_cache/hotpotqa_5attacks_top50/contriever_top50.pt"))
+    p.add_argument("--output_dir", default=str(_EVAL_ROOT / "results/hotpotqa_mistral_robustrag_multihop_ragdef"))
+    p.add_argument("--substring_dir", default=str(_EVAL_ROOT / "results/hotpotqa_mistral_robustrag_multihop_ragdef/substring_result"))
     p.add_argument("--defense_model", default="paraphrase-MiniLM-L6-v2")
     p.add_argument("--generator_model", default=GENERATOR_MODELS["mistral"])
     p.add_argument("--gpu_id", type=int, default=0)

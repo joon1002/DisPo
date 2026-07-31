@@ -9,6 +9,7 @@ Full-corpus NQ single-hop ASR evaluation with fixed components:
 import argparse
 import gc
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -40,7 +41,7 @@ from scripts.supplementary.common_eval import (
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--docs_csv", required=True, help="CSV with query,target_answer,correct_answer,doc* columns.")
-    parser.add_argument("--data_root", default="/path/to", help="Root containing datasets/nq/* files.")
+    parser.add_argument("--data_root", default=os.environ.get("DIPOISON_DATA_ROOT", "/path/to"), help="Root containing datasets/nq/* files.")
     parser.add_argument("--output_dir", default="scripts/supplementary/robustrag/results")
     parser.add_argument("--adv_per_query", type=int, default=4)
     parser.add_argument("--top_k", type=int, default=5)

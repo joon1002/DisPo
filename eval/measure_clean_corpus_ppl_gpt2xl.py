@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
 import random
 from pathlib import Path
 
@@ -11,17 +12,20 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+_ROOT = Path(__file__).resolve().parent.parent
+_DATA_ROOT = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
+
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--corpus_path", default="/path/to/datasets/nq/corpus.jsonl")
+    p.add_argument("--corpus_path", default=f"{_DATA_ROOT}/datasets/nq/corpus.jsonl")
     p.add_argument("--model_name", default="gpt2-xl")
     p.add_argument("--sample_size", type=int, default=10000)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--gpu_id", type=int, default=1)
     p.add_argument("--batch_size", type=int, default=16)
     p.add_argument("--max_length", type=int, default=512)
-    p.add_argument("--output_dir", default="/path/to/DiPoison/eval/ppl_gpt2xl_clean_nq10k")
+    p.add_argument("--output_dir", default=str(_ROOT / "eval/ppl_gpt2xl_clean_nq10k"))
     p.add_argument("--local_files_only", action="store_true")
     return p.parse_args()
 

@@ -11,7 +11,7 @@ Data:
 
 Pipeline per query:
   1. Candidate pool: poison_docs(N) + all_beir_normal_docs
-  2. Retriever top-k (contriever / e5-base / bge-base / dpr / ance / mpnet / gte-base / contriever-msmarco)
+  2. Retriever top-k (contriever / e5-base / bge-base / ance / mpnet / contriever-msmarco)
      - ST 모델: normalize_embeddings=True + cosine similarity (올바른 방식)
      - Contriever: mean pooling + dot product (원본 설계)
   3. No-Defense (ND)  : LLM on retrieved docs → ASR_sub 측정
@@ -109,15 +109,13 @@ _RETRIEVAL_ALIAS = {
     "contriever":         "facebook/contriever",
     "contriever-msmarco": "facebook/contriever-msmarco",
     "ance":               "sentence-transformers/msmarco-roberta-base-ance-firstp",
-    "dpr":                "sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base",
     "bge-base":           "BAAI/bge-base-en-v1.5",
     "e5-base":            "intfloat/e5-base-v2",
-    "gte-base":           "thenlper/gte-base",
     "mpnet":              "sentence-transformers/all-mpnet-base-v2",
 }
 
 # 모델 family 별 SentenceTransformer 사용 여부
-_ST_FAMILIES = ("sentence-transformers/", "BAAI/", "intfloat/", "thenlper/")
+_ST_FAMILIES = ("sentence-transformers/", "BAAI/", "intfloat/")
 
 # query / document prefix (E5, BGE 등)
 _QUERY_PREFIXES = {
@@ -198,7 +196,7 @@ def retrieve_topk(query, candidate_docs, r_model, top_k):
         q_emb  = embs[len(candidate_docs):]
         scores = torch.mm(d_embs, q_emb.T).squeeze(1).tolist()
     else:
-        # SentenceTransformer cosine (DPR, ANCE, BGE, E5, GTE, MPNet 등)
+        # SentenceTransformer cosine (ANCE, BGE, E5, MPNet 등)
         q_text = _RET_Q_PREFIX + query if _RET_Q_PREFIX else query
         d_texts = [_RET_D_PREFIX + d if _RET_D_PREFIX else d for d in candidate_docs]
         q_emb  = r_model.encode(q_text, convert_to_tensor=True, normalize_embeddings=True)

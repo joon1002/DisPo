@@ -13,12 +13,15 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
+_ROOT = Path(__file__).resolve().parent.parent
+_ATTACK_DATA_ROOT = os.environ.get("DIPOISON_ATTACK_DATA_ROOT", "/path/to")
+
 DEFAULT_ATTACKS = {
-    "poisonedRAG": "/path/to/nq/results/attackbaselines_pd/poisonedrag_nq100.csv",
-    "jointgcg": "/path/to/nq/results/attackbaselines_pd/jointgcg4_nq100.csv",
-    "ragparadox": "/path/to/nq/results/attackbaselines_pd/ragparadox_nq100_n4.csv",
-    "confundo": "/path/to/nq/results/attackbaselines_pd/confundo_500input_nq_N4_temp0.7_v2.csv",
-    "dipoison_v7_cont_n4g8": "/path/to/DiPoison/data/generated/pd_eval100_cont_n4g8.csv",
+    "poisonedRAG": f"{_ATTACK_DATA_ROOT}/results/attackbaselines_pd/poisonedrag_nq100.csv",
+    "jointgcg": f"{_ATTACK_DATA_ROOT}/results/attackbaselines_pd/jointgcg4_nq100.csv",
+    "ragparadox": f"{_ATTACK_DATA_ROOT}/results/attackbaselines_pd/ragparadox_nq100_n4.csv",
+    "confundo": f"{_ATTACK_DATA_ROOT}/results/attackbaselines_pd/confundo_500input_nq_N4_temp0.7_v2.csv",
+    "dipoison_v7_cont_n4g8": str(_ROOT / "data/generated/pd_eval100_cont_n4g8.csv"),
 }
 
 
@@ -28,7 +31,7 @@ def parse_args():
     p.add_argument("--gpu_id", type=int, default=1)
     p.add_argument("--batch_size", type=int, default=8)
     p.add_argument("--max_length", type=int, default=512)
-    p.add_argument("--output_dir", default="/path/to/DiPoison/eval/ppl_gpt2xl_attacks")
+    p.add_argument("--output_dir", default=str(_ROOT / "eval/ppl_gpt2xl_attacks"))
     p.add_argument("--local_files_only", action="store_true")
     return p.parse_args()
 

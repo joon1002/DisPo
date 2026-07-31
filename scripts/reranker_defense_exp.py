@@ -23,11 +23,14 @@ from sentence_transformers import CrossEncoder
 from itertools import combinations
 
 # ─── argparse (서버별 경로 오버라이드) ──────────────────────────
+_DATA_ROOT = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
 _p = argparse.ArgumentParser()
-_p.add_argument("--docs_csv",    default="/path/to/nq/results/grpo_whitebox_1.5b_run1/pd_eval100.csv")
-_p.add_argument("--corpus",      default="/path/to/datasets/nq/corpus.jsonl")
-_p.add_argument("--qrels_dir",   default="/path/to/datasets/nq/qrels")
-_p.add_argument("--answers_json",default="/path/to/ragdef/RAGDefender/artifacts/results/target_queries/nq.json")
+_p.add_argument("--docs_csv",    required=True,
+                help="Inference-generated poison-document CSV to evaluate")
+_p.add_argument("--corpus",      default=f"{_DATA_ROOT}/datasets/nq/corpus.jsonl")
+_p.add_argument("--qrels_dir",   default=f"{_DATA_ROOT}/datasets/nq/qrels")
+_p.add_argument("--answers_json",required=True,
+                help="Target-query metadata JSON (query -> BEIR id mapping)")
 _p.add_argument("--reranker",    default="cross-encoder/ms-marco-MiniLM-L-6-v2",
                 help="HuggingFace cross-encoder model ID")
 _p.add_argument("--top_k",       type=int, default=5)

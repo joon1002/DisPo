@@ -7,6 +7,7 @@ uses the same PPL scoring config as the PPL-filter defense in main_fullcorpus_pp
 """
 import argparse
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -16,14 +17,16 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+_ROOT = Path(__file__).resolve().parent.parent
+_ATTACK_DATA_ROOT = os.environ.get("DIPOISON_ATTACK_DATA_ROOT", "/path/to")
 
 DEFAULT_ATTACKS = {
-    "dipoison_full":   "/path/to/DiPoison/data/generated/pd_eval100_cont_n4g8.csv",
-    "abl_no_ret":   "/path/to/nq/results/grpo_whitebox_abl_no_ret_run1/pd_eval100_abl_no_ret_g8_b8.csv",
-    "abl_no_disp":  "/path/to/nq/results/grpo_whitebox_abl_no_disp_run1/pd_eval100_abl_no_disp.csv",
-    "abl_no_tfidf": "/path/to/nq/results/grpo_whitebox_abl_no_tfidf_run1/pd_eval100_abl_no_tfidf.csv",
-    "abl_no_gen":   "/path/to/nq/results/grpo_whitebox_abl_no_gen_run1/pd_eval100_abl_no_gen.csv",
-    "abl_no_ppl":   "/path/to/nq/results/grpo_whitebox_abl_no_ppl_run1/pd_eval100_abl_no_ppl.csv",
+    "dipoison_full":   str(_ROOT / "data/generated/pd_eval100_cont_n4g8.csv"),
+    "abl_no_ret":   f"{_ATTACK_DATA_ROOT}/results/grpo_whitebox_abl_no_ret_run1/pd_eval100_abl_no_ret_g8_b8.csv",
+    "abl_no_disp":  f"{_ATTACK_DATA_ROOT}/results/grpo_whitebox_abl_no_disp_run1/pd_eval100_abl_no_disp.csv",
+    "abl_no_tfidf": f"{_ATTACK_DATA_ROOT}/results/grpo_whitebox_abl_no_tfidf_run1/pd_eval100_abl_no_tfidf.csv",
+    "abl_no_gen":   f"{_ATTACK_DATA_ROOT}/results/grpo_whitebox_abl_no_gen_run1/pd_eval100_abl_no_gen.csv",
+    "abl_no_ppl":   f"{_ATTACK_DATA_ROOT}/results/grpo_whitebox_abl_no_ppl_run1/pd_eval100_abl_no_ppl.csv",
 }
 
 
@@ -33,7 +36,7 @@ def parse_args():
     p.add_argument("--gpu_id", type=int, default=1)
     p.add_argument("--batch_size", type=int, default=16)
     p.add_argument("--max_length", type=int, default=512)
-    p.add_argument("--output_dir", default="/path/to/DiPoison/eval/ppl_gpt2xl_objective_ablation")
+    p.add_argument("--output_dir", default=str(_ROOT / "eval/ppl_gpt2xl_objective_ablation"))
     p.add_argument("--local_files_only", action="store_true")
     return p.parse_args()
 

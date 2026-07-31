@@ -67,13 +67,11 @@ _RETRIEVAL_ALIAS = {
     "contriever":         "facebook/contriever",
     "contriever-msmarco": "facebook/contriever-msmarco",
     "ance":               "sentence-transformers/msmarco-roberta-base-ance-firstp",
-    "dpr":                "sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base",
     "bge-base":           "BAAI/bge-base-en-v1.5",
     "e5-base":            "intfloat/e5-base-v2",
 }
 
 _CONTRIEVER_FAMILY = {"facebook/contriever", "facebook/contriever-msmarco"}
-_DOT_PRODUCT_MODELS = {"sentence-transformers/multi-qa-MiniLM-L6-dot-v1"}
 
 _QUERY_PREFIXES = {
     "intfloat/e5-base-v2":   "query: ",
@@ -379,7 +377,7 @@ def main():
 
     model_hf_name       = _RETRIEVAL_ALIAS[args.retrieval_model]
     is_contriever_family = model_hf_name in _CONTRIEVER_FAMILY
-    use_cosine           = not (is_contriever_family or model_hf_name in _DOT_PRODUCT_MODELS)
+    use_cosine           = not is_contriever_family
     q_prefix             = _QUERY_PREFIXES.get(model_hf_name, "")
     d_prefix             = _DOC_PREFIXES.get(model_hf_name, "")
 

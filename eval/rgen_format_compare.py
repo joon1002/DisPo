@@ -17,6 +17,8 @@ from pathlib import Path
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from scipy.stats import spearmanr
 
+_ROOT = Path(__file__).resolve().parent.parent
+
 # ── 설정 ─────────────────────────────────────────────────────
 VICUNA_MODEL   = "lmsys/vicuna-7b-v1.3"
 DEVICE         = "cuda:0"
@@ -25,9 +27,9 @@ NLL_SHIFT      = 2.0   # train_grpo_poison.py 와 동일
 
 # 평가할 doc 파일 (cont N2 + e5)
 DOC_FILES = [
-    ("/path/to/DiPoison/results/grpo_n2_q500_run1/pd_eval100_N2_v2.csv",  "cont_v2", "doc0_seed"),
-    ("/path/to/DiPoison/results/grpo_n2_q500_run1/pd_eval100_N2_v2.csv",  "cont_v2_doc1", "doc1"),
-    ("/path/to/DiPoison/data/generated/pd_eval100_e5_val_v2.csv",           "e5_v2",   "doc0_seed"),
+    (str(_ROOT / "results/grpo_n2_q500_run1/pd_eval100_N2_v2.csv"),  "cont_v2", "doc0_seed"),
+    (str(_ROOT / "results/grpo_n2_q500_run1/pd_eval100_N2_v2.csv"),  "cont_v2_doc1", "doc1"),
+    (str(_ROOT / "data/generated/pd_eval100_e5_val_v2.csv"),           "e5_v2",   "doc0_seed"),
 ]
 
 # Standalone 프롬프트 (훈련에서 사용하는 _RAG_PROMPT 와 동일)

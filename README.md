@@ -108,9 +108,11 @@ pip install fschat==0.2.36
 - Retriever(기본): `facebook/contriever`
 - Retriever(E5): `intfloat/e5-base-v2`
 - Defense filter: `paraphrase-MiniLM-L6-v2`
-- full-corpus 8검색기 비교 시 추가: `contriever-msmarco`, `sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base`(dpr),
+- full-corpus 8검색기 비교(Table 3, Supp Table 10/11) 시 추가: `contriever-msmarco`,
   `sentence-transformers/msmarco-roberta-base-ance-firstp`(ance), `BAAI/bge-base-en-v1.5`(bge-base),
-  `intfloat/e5-base-v2`(e5-base), `thenlper/gte-base`(gte-base), `sentence-transformers/all-mpnet-base-v2`(mpnet)
+  `sentence-transformers/all-mpnet-base-v2`(mpnet), BM25(lexical), `nomic-ai/nomic-embed-text-v1.5`(nomic-v1.5)
+- unseen defense space(Table 1, Supp Table 5) 시 추가: `sentence-transformers/all-mpnet-base-v2`(mpnet),
+  `sentence-transformers/msmarco-roberta-base-ance-firstp`(ance), `BAAI/bge-base-en-v1.5`(bge-base), `thenlper/gte-base`(gte)
 -------
 방어 포함 성능평가(full-corpus, 기본 방식)에 필요한 corpus 직접 받는 방법
 

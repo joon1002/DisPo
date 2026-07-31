@@ -32,11 +32,8 @@ _RETRIEVAL_ALIAS.update({
 })
 
 _CONTRIEVER_FAMILY = set(getattr(fc, "_CONTRIEVER_FAMILY", {"facebook/contriever", "facebook/contriever-msmarco"}))
+# No non-Contriever dot-product retrievers among the paper's 8 retrievers.
 _DOT_PRODUCT_MODELS = set(getattr(fc, "_DOT_PRODUCT_MODELS", set()))
-_DOT_PRODUCT_MODELS.update({
-    "sentence-transformers/multi-qa-MiniLM-L6-dot-v1",
-    "sentence-transformers/msmarco-distilbert-base-tas-b",
-})
 
 _QUERY_PREFIXES = dict(getattr(fc, "_QUERY_PREFIXES", {}))
 _QUERY_PREFIXES.update({
@@ -50,14 +47,6 @@ _DOC_PREFIXES.update({
     "nomic-ai/nomic-embed-text-v1.5": "search_document: ",
 })
 
-_DPR_QUESTION_ENCODER = getattr(
-    fc, "_DPR_QUESTION_ENCODER",
-    "sentence-transformers/facebook-dpr-question_encoder-single-nq-base",
-)
-_DPR_CONTEXT_ENCODER = getattr(
-    fc, "_DPR_CONTEXT_ENCODER",
-    "sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base",
-)
 
 
 def load_queries(paths):
@@ -90,9 +79,6 @@ def main():
                    help="inner SentenceTransformer encode batch size (controls GPU peak memory)")
     p.add_argument("--max_seq_length", type=int, default=512,
                    help="truncate sequences to this length (default 512, matches other retrievers)")
-    p.add_argument("--dpr_query_encoder", type=str, default="ctx",
-                   choices=["standard", "ctx"],
-                   help="DPR query encoder: ctx=legacy context encoder, standard=question encoder")
     p.add_argument("--output", type=str, required=True)
     args = p.parse_args()
 
@@ -104,19 +90,17 @@ def main():
 
     model_hf_name = _RETRIEVAL_ALIAS[args.retrieval_model]
     is_contriever_family = model_hf_name in _CONTRIEVER_FAMILY
-    is_standard_dpr = args.retrieval_model == "dpr" and args.dpr_query_encoder == "standard"
     is_bm25 = model_hf_name == "bm25"
     use_cosine = not (is_contriever_family or model_hf_name in _DOT_PRODUCT_MODELS or is_bm25)
-    if is_standard_dpr:
-        use_cosine = False
     q_prefix = _QUERY_PREFIXES.get(model_hf_name, "")
     d_prefix = _DOC_PREFIXES.get(model_hf_name, "")
     if args.dataset in fc._DS_CFG:
         cfg = dict(fc._DS_CFG[args.dataset])
     else:
+        _data_root = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
         cfg = {
-            "corpus_path": "/path/to/datasets/msmarco/corpus.jsonl",
-            "embed_cache_dir": "/path/to/datasets/msmarco",
+            "corpus_path": f"{_data_root}/datasets/msmarco/corpus.jsonl",
+            "embed_cache_dir": f"{_data_root}/datasets/msmarco",
         }
     if args.corpus_path:
         cfg["corpus_path"] = args.corpus_path
@@ -141,27 +125,6 @@ def main():
 
         query_encode_fn = encode_fn
         doc_encode_fn = encode_fn
-
-    elif is_standard_dpr:
-        ctx_model = SentenceTransformer(_DPR_CONTEXT_ENCODER, trust_remote_code=True).to(device)
-        q_model = SentenceTransformer(_DPR_QUESTION_ENCODER, trust_remote_code=True).to(device)
-        ctx_model.eval()
-        q_model.eval()
-
-        def _st_encode(model, texts):
-            with torch.no_grad():
-                return model.encode(
-                    texts, batch_size=256, convert_to_tensor=True,
-                    normalize_embeddings=False, show_progress_bar=False,
-                ).cpu()
-
-        def doc_encode_fn(texts):
-            return _st_encode(ctx_model, texts)
-
-        def query_encode_fn(texts):
-            return _st_encode(q_model, texts)
-
-        encode_fn = doc_encode_fn
 
     elif is_bm25:
         encode_fn = None
@@ -266,9 +229,6 @@ def main():
             "corpus_size": len(corpus_texts),
             "score_dtype": "float16",
             "scorer": "bm25" if is_bm25 else ("cosine" if use_cosine else "dot"),
-            "dpr_query_encoder": args.dpr_query_encoder if args.retrieval_model == "dpr" else "",
-            "dpr_question_hf": _DPR_QUESTION_ENCODER if is_standard_dpr else "",
-            "dpr_context_hf": _DPR_CONTEXT_ENCODER if args.retrieval_model == "dpr" else "",
             "q_prefix": q_prefix,
             "d_prefix": d_prefix,
             "docs_csv": args.docs_csv,

@@ -27,7 +27,7 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--attacks_json", required=True,
                    help="JSON object: attack name -> docs_csv path")
-    p.add_argument("--corpus", default="/path/to/datasets/nq/corpus.jsonl")
+    p.add_argument("--corpus", default=f"{os.environ.get('DIPOISON_DATA_ROOT', '/path/to')}/datasets/nq/corpus.jsonl")
     p.add_argument("--clean_topn_cache", required=True)
     p.add_argument("--rerankers", required=True)
     p.add_argument("--output_dir", required=True)

@@ -40,12 +40,13 @@ from sentence_transformers import SentenceTransformer, util as st_util
 from tqdm import tqdm
 
 _ROOT = Path(__file__).resolve().parent
-_HOTPOTQA_CORPUS_PATH  = "/path/to/datasets/hotpotqa/corpus.jsonl"
-_HOTPOTQA_QUERIES_PATH = "/path/to/datasets/hotpotqa/queries.jsonl"
+_DATA_ROOT = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
+_HOTPOTQA_CORPUS_PATH  = f"{_DATA_ROOT}/datasets/hotpotqa/corpus.jsonl"
+_HOTPOTQA_QUERIES_PATH = f"{_DATA_ROOT}/datasets/hotpotqa/queries.jsonl"
 _HOTPOTQA_QRELS_PATHS  = [
-    "/path/to/datasets/hotpotqa/qrels/train.tsv",
-    "/path/to/datasets/hotpotqa/qrels/dev.tsv",
-    "/path/to/datasets/hotpotqa/qrels/test.tsv",
+    f"{_DATA_ROOT}/datasets/hotpotqa/qrels/train.tsv",
+    f"{_DATA_ROOT}/datasets/hotpotqa/qrels/dev.tsv",
+    f"{_DATA_ROOT}/datasets/hotpotqa/qrels/test.tsv",
 ]
 _VICUNA_MODEL  = "lmsys/vicuna-7b-v1.3"
 _MISTRAL_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
@@ -194,11 +195,9 @@ class _DirectHFLLM:
 _RETRIEVER_MAP = {
     "contriever":         ("facebook/contriever",                                           "contriever"),
     "contriever-msmarco": ("facebook/contriever-msmarco",                                   "contriever"),
-    "dpr":                ("sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base", "st"),
     "mpnet":              ("sentence-transformers/all-mpnet-base-v2",                       "st"),
     "e5-base":            ("intfloat/e5-base-v2",                                           "st"),
     "ance":               ("sentence-transformers/msmarco-roberta-base-ance-firstp",        "st"),
-    "gte-base":           ("thenlper/gte-base",                                             "st"),
     "bge-base":           ("BAAI/bge-base-en-v1.5",                                        "st"),
 }
 _E5_Q_PREF  = "query: ";    _E5_D_PREF  = "passage: "
@@ -324,7 +323,7 @@ def parse_args():
     p.add_argument("--gpu_id",          type=int, default=0)
     p.add_argument("--defense_model",   type=str, default="paraphrase-MiniLM-L6-v2")
     p.add_argument("--retrieval_model", type=str, default="contriever",
-                   help="contriever | contriever-msmarco | dpr | mpnet | e5-base | ance | gte-base | bge-base")
+                   help="contriever | contriever-msmarco | mpnet | e5-base | ance | bge-base")
     p.add_argument("--run_label",       type=str, default="")
     p.add_argument("--llm_model",       type=str, default="vicuna",
                    choices=["vicuna", "mistral", "llama3", "qwen2.5"])
