@@ -1,7 +1,7 @@
 """
 clean_acc_eval.py
 
-악성문서 주입 없이 clean normal docs만으로 RAG 정확도(ACC) 측정.
+Measures RAG accuracy (ACC) using only clean normal docs, without any poison-document injection.
   - Clean top-5  : Contriever top-5 (normal only) → Vicuna → ACC
   - Clean top-20 : Contriever top-20 (normal only) → Vicuna → ACC
 
@@ -186,16 +186,16 @@ for entry in tqdm(query_data, desc="Clean-top20", ncols=90):
     c20_acc += entry["correct"].lower() in resp.lower()
     c20_asr += entry["target"].lower()  in resp.lower()
 
-# ─── 결과 ───────────────────────────────────────────────────
+# ─── Results ──────────────────────────────────────────────
 W = 70
 print(f"\n{'='*W}")
-print(f"  Clean RAG 정확도 측정 (악성문서 주입 없음, N={N})")
-print(f"  {'방법':<35}  {'ACC':>6}  {'Spurious-ASR':>13}")
+print(f"  Clean RAG accuracy measurement (no poison-document injection, N={N})")
+print(f"  {'Method':<35}  {'ACC':>6}  {'Spurious-ASR':>13}")
 print(f"  {'-'*60}")
 print(f"  {'Clean top-5  (normal docs only)':<35}  {c5_acc/N*100:>5.1f}%  {c5_asr/N*100:>12.1f}%")
 print(f"  {'Clean top-20 (normal docs only)':<35}  {c20_acc/N*100:>5.1f}%  {c20_asr/N*100:>12.1f}%")
 print(f"{'='*W}")
-print(f"\n  ※ ACC = correct_answer 포함 여부")
-print(f"  ※ Spurious-ASR = 악성문서 없이도 target(wrong) answer가 생성되는 비율")
-print(f"     (0이어야 정상; 양수면 target answer가 일반 답변과 겹치는 쿼리 존재)")
+print(f"\n  * ACC = whether correct_answer is contained in the response")
+print(f"  * Spurious-ASR = rate at which the target (wrong) answer is generated even without poison docs")
+print(f"     (should be 0; a positive value means some queries' target answer overlaps with the normal response)")
 print(f"{'='*W}")
