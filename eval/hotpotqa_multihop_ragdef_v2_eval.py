@@ -1,21 +1,21 @@
 """
 hotpotqa_multihop_ragdef_v2_eval.py
 
-RAGDefender multihop 방어 완전 구현 (Stage1 + Stage2).
-RAGDefender 원본 (main.py: apply_ragdefender_on_topk)과 방어 알고리즘 동일.
+Full implementation of the RAGDefender multihop defense (Stage1 + Stage2).
+Same defense algorithm as the original RAGDefender (main.py: apply_ragdefender_on_topk).
 
-필요한 외부 파일:
+Required external files:
   - HotpotQA corpus.jsonl  (--corpus_path)
-  - Contriever full-corpus 임베딩 캐시 .pt  (--emb_cache)
-  - 공격 문서 CSV  (ATTACK_CSVS 또는 --attacks로 선택)
+  - Contriever full-corpus embedding cache .pt  (--emb_cache)
+  - Attack-document CSV  (select via ATTACK_CSVS or --attacks)
 
 Usage:
-  # 전체 공격 실행 (기본)
+  # Run all attacks (default)
   CUDA_VISIBLE_DEVICES=0 python eval/hotpotqa_multihop_ragdef_v2_eval.py \\
       --corpus_path /path/to/hotpotqa/corpus.jsonl \\
       --emb_cache   /path/to/hotpotqa/contriever_embs_fullcorpus.pt
 
-  # 특정 공격만 실행
+  # Run only specific attacks
   CUDA_VISIBLE_DEVICES=1 python eval/hotpotqa_multihop_ragdef_v2_eval.py \\
       --attacks dipoison4 jointgcg_v2_n4 --gpu_id 0
 """
@@ -59,7 +59,7 @@ GENERATOR_MODELS = {
     "gpt-4o-mini": "eval/model_configs/gpt4o_mini_config.json",
 }
 
-# 실험에 사용하는 공격 파일 목록 (경로는 _ROOT 기준 상대 경로)
+# List of attack files used in the experiment (paths relative to _ROOT)
 ATTACK_CSVS = {
     "dipoison4":      "data/attackbaselines_pd/DiPoison/hotpotqa/dipoison4_hotpot100.csv",
     "poisonedrag4":   "data/attackbaselines_pd/PoisonedRAG/hotpotqa/poisonedrag4_hotpot100.csv",
@@ -82,37 +82,37 @@ _PROMPT_TMPL = (
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--corpus_path", default=f"{_DATA_ROOT}/datasets/hotpotqa/corpus.jsonl",
-                        help="HotpotQA corpus.jsonl 경로")
+                        help="Path to the HotpotQA corpus.jsonl")
     parser.add_argument("--emb_cache", default=f"{_DATA_ROOT}/datasets/hotpotqa/contriever_embs_fullcorpus.pt",
-                        help="Contriever full-corpus 임베딩 캐시 .pt 경로")
+                        help="Path to the Contriever full-corpus embedding cache .pt")
     parser.add_argument("--gpu_id", type=int, default=0,
-                        help="CUDA_VISIBLE_DEVICES로 노출된 GPU 내부 인덱스 (기본 0)")
+                        help="GPU index within CUDA_VISIBLE_DEVICES (default 0)")
     parser.add_argument("--top_k", type=int, default=5)
     parser.add_argument("--attacks", nargs="+", default=None,
                         choices=list(ATTACK_CSVS.keys()),
-                        help="실행할 공격 이름 목록 (기본: 전체)")
+                        help="List of attack names to run (default: all)")
     parser.add_argument("--attack_csv", default=None,
-                        help="단일 공격 CSV 경로. 지정하면 --attacks의 첫 이름에 이 경로를 사용")
+                        help="Single attack CSV path. If set, uses this path for the first name in --attacks")
     parser.add_argument("--defense_key", default="minilm",
                         choices=list(DEFENSE_MODELS.keys()),
-                        help="RAGDefender에서 사용할 sentence-transformer defense 모델")
+                        help="Sentence-transformer defense model used by RAGDefender")
     parser.add_argument("--defense_model", default=None,
-                        help="직접 지정할 SentenceTransformer 모델명/HF id")
+                        help="Directly specify a SentenceTransformer model name/HF id")
     parser.add_argument("--generator", default="vicuna",
                         choices=list(GENERATOR_MODELS.keys()),
-                        help="응답 생성기: vicuna | mistral | llama3 | qwen2.5 | gpt-4o-mini")
+                        help="Response generator: vicuna | mistral | llama3 | qwen2.5 | gpt-4o-mini")
     parser.add_argument("--generator_model_path", default=None,
-                        help="HF generator 모델 경로/HF id 직접 지정")
+                        help="Directly specify the HF generator model path/HF id")
     parser.add_argument("--model_config_path", default=None,
-                        help="gpt-4o-mini 등 create_model provider용 config JSON")
+                        help="config JSON for create_model providers such as gpt-4o-mini")
     parser.add_argument("--max_new_tokens", type=int, default=150)
     parser.add_argument("--local_files_only", action="store_true")
     parser.add_argument("--out_suffix", default="",
-                        help="로그/summary 파일명에 추가할 suffix")
+                        help="Suffix appended to the log/summary filenames")
     parser.add_argument("--detail_json", default=None,
-                        help="쿼리별 ND/RD 응답과 공격 성공 여부를 저장할 JSON 경로")
+                        help="JSON path to save per-query ND/RD responses and attack success")
     parser.add_argument("--skip_nd", action="store_true",
-                        help="ND 응답 생성을 생략하고 RD 결과만 측정")
+                        help="Skip ND response generation and only measure RD results")
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
@@ -168,7 +168,7 @@ class FastchatVicuna:
         try:
             from fastchat.model import load_model, get_conversation_template
         except ImportError:
-            raise ImportError("fastchat 없음: pip install fschat")
+            raise ImportError("fastchat not installed: pip install fschat")
         self._get_conv = get_conversation_template
         self._model, self._tok = load_model(
             model_path=_VICUNA_MODEL, device="cuda", num_gpus=1,
@@ -242,7 +242,7 @@ class HFChatGenerator:
 
 def load_generator(args, device, log):
     if args.generator == "vicuna":
-        log("\n[step5] Vicuna-7B 로드...")
+        log("\n[step5] Loading Vicuna-7B...")
         llm = FastchatVicuna()
     elif args.generator == "gpt-4o-mini":
         cfg_path = args.model_config_path or GENERATOR_MODELS[args.generator]
@@ -251,11 +251,11 @@ def load_generator(args, device, log):
             cfg_path = _ROOT / cfg_path
         sys.path.insert(0, str(_ROOT / "eval" / "src"))
         from models import create_model
-        log(f"\n[step5] GPT provider 로드: {cfg_path}")
+        log(f"\n[step5] Loading GPT provider: {cfg_path}")
         llm = create_model(str(cfg_path))
     else:
         model_path = args.generator_model_path or GENERATOR_MODELS[args.generator]
-        log(f"\n[step5] HFChat generator 로드: {model_path}")
+        log(f"\n[step5] Loading HFChat generator: {model_path}")
         llm = HFChatGenerator(
             model_path, device, max_new_tokens=args.max_new_tokens,
             local_files_only=args.local_files_only,
@@ -263,7 +263,7 @@ def load_generator(args, device, log):
     log(f"[step5] generator={args.generator}, provider={getattr(llm, 'provider', 'unknown')}, "
         f"name={getattr(llm, 'name', '')}")
     if torch.cuda.is_available():
-        log(f"[step5] generator 완료. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+        log(f"[step5] generator loaded. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
     return llm
 
 
@@ -330,7 +330,7 @@ def ragdefender_multihop(docs, defense_model):
     return surviving if surviving else docs
 
 
-# ── CSV 로드 ───────────────────────────────────────────────────────────────────
+# ── Load CSV ─────────────────────────────────────────────────────────────────
 def load_csv(csv_path):
     df = pd.read_csv(csv_path)
     if "adv_texts" in df.columns:
@@ -389,14 +389,14 @@ def main():
         log(f"[config] model_config_path={args.model_config_path}")
     log(f"[config] attacks={list(attacks_to_run.keys())}")
 
-    # ── Contriever 로드 ────────────────────────────────────────────────────────
-    log("\n[step1] Contriever 로드...")
+    # ── Load Contriever ─────────────────────────────────────────────────────
+    log("\n[step1] Loading Contriever...")
     ctv_tok = AutoTokenizer.from_pretrained(_CONTRIEVER_HF)
     ctv_mod = AutoModel.from_pretrained(_CONTRIEVER_HF, torch_dtype=torch.float32).to(device)
     ctv_mod.eval()
 
-    # ── corpus 텍스트 로드 ─────────────────────────────────────────────────────
-    log("[step2] corpus.jsonl 로드...")
+    # ── Load corpus text ────────────────────────────────────────────────────
+    log("[step2] Loading corpus.jsonl...")
     corpus_texts = []
     with open(args.corpus_path) as f:
         for line in f:
@@ -404,23 +404,23 @@ def main():
             corpus_texts.append(d.get("text", ""))
     log(f"[step2] corpus {len(corpus_texts):,} passages")
 
-    # ── corpus 임베딩 GPU 로드 ─────────────────────────────────────────────────
-    log(f"[step3] corpus 임베딩 캐시 로드: {args.emb_cache}")
+    # ── Load corpus embeddings to GPU ───────────────────────────────────────
+    log(f"[step3] Loading corpus embedding cache: {args.emb_cache}")
     corpus_embs = torch.load(args.emb_cache, map_location="cpu", weights_only=True)
     corpus_embs_gpu = corpus_embs.half().to(device)
     del corpus_embs
     gc.collect()
-    log(f"[step3] corpus_embs GPU 완료. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+    log(f"[step3] corpus_embs loaded to GPU. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
-    # ── defense model 로드 ─────────────────────────────────────────────────────
-    log(f"\n[step4] defense model 로드: {defense_model_name}")
+    # ── Load defense model ──────────────────────────────────────────────────
+    log(f"\n[step4] Loading defense model: {defense_model_name}")
     defense_model = SentenceTransformer(defense_model_name)
-    log(f"[step4] defense model 완료")
+    log(f"[step4] defense model loaded")
 
-    # ── Generator 로드 ────────────────────────────────────────────────────────
+    # ── Load generator ──────────────────────────────────────────────────────
     llm = load_generator(args, device, log)
 
-    # ── 공격별 평가 루프 ───────────────────────────────────────────────────────
+    # ── Per-attack evaluation loop ──────────────────────────────────────────
     all_results = []
     all_details = []
 
@@ -548,7 +548,7 @@ def main():
         del q_embs, all_adv_embs, adv_embs_per_query
         gc.collect(); torch.cuda.empty_cache()
 
-    # ── summary 저장 ───────────────────────────────────────────────────────────
+    # ── Save summary ────────────────────────────────────────────────────────
     out_json = OUT_DIR / f"summary_{defense_key}_{generator_label}{out_suffix}.json"
     with open(out_json, "w") as f:
         json.dump(all_results, f, indent=2, ensure_ascii=False)
