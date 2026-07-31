@@ -7,7 +7,7 @@ abl final_model에서 nq100_validate 100개 쿼리에 대해 poison docs 생성.
 
 Usage:
   CUDA_VISIBLE_DEVICES=0 /path/to/DiPoison/.venv/bin/python \\
-    /path/to/DiPoison/scripts/infer_abl_checkpoint.py \\
+    /path/to/DiPoison/scripts/ablation/inference/infer_abl_checkpoint.py \\
     --ablation no_disp_embed \\
     --checkpoint /path/to/DiPoison/data/final_model_abl_nodisp \\
     --output    /path/to/DiPoison/data/generated/pd_eval100_abl_no_disp_g8_b4.csv \\
@@ -16,8 +16,10 @@ Usage:
 import argparse, json, os, re, sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-sys.path.insert(0, SCRIPT_DIR)
+# scripts/ablation/inference/ 에 위치 → repo root까지 3단계 위
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR)))
+# train_grpo_poison_abl.py는 형제 폴더 scripts/ablation/train/ 에 있음
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "scripts", "ablation", "train"))
 
 import pandas as pd
 import torch

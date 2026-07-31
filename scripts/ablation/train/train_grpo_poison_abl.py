@@ -18,14 +18,14 @@ GRPO 기반 ablation study — 보상 함수 5개 중 하나씩 제거하여 기
   no_ppl        → r_ppl 제외
 
 각 --ablation 값이 제거하는 paper reward(§3.2)의 대응:
-  no_retrieval  → Eq.1 r_retrieval 제외 → Table 7 "w/o Retrieval" 행
-  no_disp_embed → Eq.2 r_disp_embed(=r_emb) 제외 → Table 7 "w/o Semantic Dispersion" 행
-  no_tfidf_disp → Eq.3 r_tfidf_disp(=r_lex) 제외 → Table 7 "w/o Lexical Dispersion" 행
-  no_generation → Eq.4 r_generation(=r_pay) 제외 → Table 7 "w/o Payload" 행
-  no_ppl        → Eq.5 r_ppl(=r_flu) 제외 → Table 7 "w/o Fluency" 행
+  no_retrieval  → Eq.1 r_retrieval 제외 → Table 6 "w/o Retrieval" 행
+  no_disp_embed → Eq.2 r_disp_embed(=r_emb) 제외 → Table 6 "w/o Semantic Dispersion" 행
+  no_tfidf_disp → Eq.3 r_tfidf_disp(=r_lex) 제외 → Table 6 "w/o Lexical Dispersion" 행
+  no_generation → Eq.4 r_generation(=r_pay) 제외 → Table 6 "w/o Payload" 행
+  no_ppl        → Eq.5 r_ppl(=r_flu) 제외 → Table 6 "w/o Fluency" 행
 
 Usage:
-  CUDA_VISIBLE_DEVICES=1 python scripts/train_grpo_poison_abl.py \\
+  CUDA_VISIBLE_DEVICES=1 python scripts/ablation/train/train_grpo_poison_abl.py \\
     --ablation no_retrieval \\
     --output_dir results/grpo_whitebox_abl_no_ret_run1 \\
     --num_epochs 1 --group_size 8 --lora_r 16 --gpu_id 1
@@ -53,7 +53,8 @@ from sentence_transformers import SentenceTransformer
 # CONSTANTS / DEFAULTS
 # ─────────────────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+# scripts/ablation/train/ 에 위치 → repo root까지 3단계 위
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR)))
 DEFAULT_INPUT     = os.path.join(PROJECT_ROOT, "data", "nq_500_pd_7b.csv")
 DEFAULT_OUTPUT    = os.path.join(PROJECT_ROOT, "results", "grpo_whitebox_abl_run1")
 GENERATOR_MODEL   = "Qwen/Qwen2.5-1.5B-Instruct"
