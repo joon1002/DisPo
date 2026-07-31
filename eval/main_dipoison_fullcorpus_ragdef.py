@@ -85,6 +85,14 @@ _DS_CFG = {
         "embed_cache_dir": f"{_DATA_ROOT}/datasets/hotpotqa",
         "log_subdir":    "txt_logs_fullcorpus_hotpotqa",
     },
+    "msmarco": {
+        "corpus_path":   f"{_DATA_ROOT}/datasets/msmarco/corpus.jsonl",
+        "qrels_paths":   [],
+        "queries_jsonl": None,
+        "answers_json":  None,
+        "embed_cache_dir": f"{_DATA_ROOT}/datasets/msmarco",
+        "log_subdir":    "txt_logs_fullcorpus_msmarco",
+    },
 }
 
 _RETRIEVAL_ALIAS = {
@@ -413,7 +421,7 @@ def log_json(fp, title, data):
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--dataset",          type=str, required=True, choices=["nq", "hotpotqa"])
+    p.add_argument("--dataset",          type=str, required=True, choices=["nq", "hotpotqa", "msmarco"])
     p.add_argument("--retrieval_model",  type=str, default="contriever",
                    choices=list(_RETRIEVAL_ALIAS.keys()),
                    help="retriever 종류 (default: contriever)")

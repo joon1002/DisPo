@@ -41,7 +41,7 @@ _DEFAULT_MODEL_CONFIG = str(_ROOT / "model_configs" / "vicuna7b_config.json")
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--dataset", type=str, default="nq", choices=["nq", "hotpotqa"])
+    p.add_argument("--dataset", type=str, default="nq", choices=["nq", "hotpotqa", "msmarco"])
     p.add_argument("--queries_csv", type=str,
                    default="data/generated/nq_clean_acc/clean_acc_queries300.csv")
     p.add_argument("--out_csv", type=str,

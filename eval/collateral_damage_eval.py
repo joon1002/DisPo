@@ -47,7 +47,7 @@ _DOC_COLS = ["doc0_seed", "doc1", "doc2", "doc3", "doc4", "doc5", "doc6"]
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--dataset", type=str, default="nq", choices=["nq", "hotpotqa"])
+    p.add_argument("--dataset", type=str, default="nq", choices=["nq", "hotpotqa", "msmarco"])
     p.add_argument("--victim_queries_csv", type=str,
                    default="data/generated/nq_clean_acc/clean_acc100.csv")
     p.add_argument("--poison_docs_csv", type=str,
