@@ -2,7 +2,7 @@
 """
 infer_checkpoint.py
 
-final_model에서 100 eval 쿼리에 대해 쿼리당 4개(doc0_seed+doc1~doc3) 생성.
+Generates 4 documents per query (doc0_seed+doc1~doc3) for the 100 eval queries from final_model.
 
 Usage:
   CUDA_VISIBLE_DEVICES=0 python scripts/infer_checkpoint.py \
@@ -63,22 +63,22 @@ def parse_args():
     p.add_argument("--gpu_id",        type=int, default=0)
     p.add_argument("--group_size",    type=int, default=8)
     p.add_argument("--num_adv_docs",  type=int, default=tgp.DEFAULT_NUM_ADV_DOCS,
-                   help="seed 제외 추가 생성 문서 수. 기본 3 → 총 N=4. --N 지정 시 무시됨")
+                   help="Number of generated documents excluding the seed. Default 3 -> N=4 total. Ignored if --N is set")
     p.add_argument("--N",             type=int, default=None,
-                   help="seed 포함 총 악성문서 수. 예: --N 4 → doc0_seed+doc1~doc3")
+                   help="Total poison documents including the seed. e.g. --N 4 -> doc0_seed+doc1~doc3")
     p.add_argument("--embed_device",    default="cuda")
     p.add_argument("--gen_batch_size",  type=int, default=1,
-                   help="G 후보를 한 번에 몇 개씩 배치로 생성할지 (기본 1=순차). "
-                        "G와 같게 설정하면 가장 빠름.")
+                   help="How many of the G candidates to batch-generate at once (default 1=sequential). "
+                        "Fastest when set equal to G.")
     p.add_argument("--allow_train_input", action="store_true",
-                   help="훈련 쿼리 데이터셋 입력 허용 (기본 비허용)")
+                   help="Allow a training-query dataset as input (disallowed by default)")
     args = p.parse_args()
     if args.N is not None:
         if args.N < 2:
-            p.error("--N은 최소 2 이상이어야 합니다 (seed 1개 + 추가 문서 1개 이상).")
+            p.error("--N must be at least 2 (1 seed + at least 1 additional document).")
         args.num_adv_docs = args.N - 1
     if args.num_adv_docs < 1:
-        p.error("--num_adv_docs는 최소 1 이상이어야 합니다 (seed 제외 추가 문서 수).")
+        p.error("--num_adv_docs must be at least 1 (documents generated beyond the seed).")
     return args
 
 _TRAIN_KEYWORDS = ["_train", "pd_7b", "pd_7", "nq_500", "nq_800", "nq_350", "nq_600"]
@@ -87,9 +87,9 @@ def _check_not_train_input(input_path: str):
     path_lower = input_path.lower()
     if any(kw in path_lower for kw in _TRAIN_KEYWORDS):
         sys.exit(
-            f"\n[GUARD] 훈련 쿼리 데이터셋 입력 거부: {input_path}\n"
-            "  inference는 평가용 nq100_validate.csv만 허용합니다.\n"
-            "  훈련 쿼리 inference가 정말 필요하면 --allow_train_input 플래그를 추가하세요.\n"
+            f"\n[GUARD] Refusing a training-query dataset as input: {input_path}\n"
+            "  Inference only allows the evaluation set nq100_validate.csv.\n"
+            "  If you genuinely need inference on training queries, add the --allow_train_input flag.\n"
         )
 
 def main():
@@ -100,7 +100,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"[gpu] Using {torch.cuda.get_device_name(0) if device=='cuda' else 'CPU'}")
 
-    # ── White-box frozen 모델 로드 ────────────────────────────────────
+    # ── Load white-box frozen models ─────────────────────────────────
     tgp.init_whitebox_models(
         retrieval_model=tgp.RETRIEVAL_MODEL,
         defense_model=tgp.DEFENSE_MODEL,
@@ -111,7 +111,7 @@ def main():
         max_prompt_tokens=tgp.MAX_PROMPT_TOKENS,
     )
 
-    # ── Generator (LoRA) 로드 ─────────────────────────────────────────
+    # ── Load generator (LoRA) ───────────────────────────────────────
     print(f"[load] Base model: {tgp.GENERATOR_MODEL}")
     tokenizer = AutoTokenizer.from_pretrained(args.checkpoint, use_fast=True)
     if tokenizer.pad_token is None:
@@ -128,7 +128,7 @@ def main():
     model.eval()
     model.requires_grad_(False)
 
-    # ── UncertaintyWeighter 로드 ──────────────────────────────────────
+    # ── Load UncertaintyWeighter ─────────────────────────────────────
     uw = tgp.UncertaintyWeighter(n_tasks=5).to(device)
     uw_path = os.path.join(args.checkpoint, "uncertainty_weighter.pt")
     if os.path.exists(uw_path):
@@ -138,14 +138,14 @@ def main():
         print("[warn] uncertainty_weighter.pt not found — using default weights")
     uw.eval()
 
-    # ── 데이터 로드 + TF-IDF fit ──────────────────────────────────────
+    # ── Load data + fit TF-IDF ───────────────────────────────────────
     df = pd.read_csv(args.input)
     print(f"[data] {len(df)} queries from {args.input}")
     tgp.fit_tfidf(list(df["seed_doc"].astype(str)))
     print("[tfidf] Vectorizer fitted")
 
-    # ── 추론 (paper §3.2-3.3: Stage 2 정책으로 doc1..doc{N-1} 순차 생성 → Stage 3 주입 직전 산출물) ──
-    print(f"[cfg] G={args.group_size}, N={args.num_adv_docs + 1} (seed 포함)")
+    # ── Inference (paper §3.2-3.3: Stage 2 policy sequentially generates doc1..doc{N-1} → the artifact right before Stage 3 injection) ──
+    print(f"[cfg] G={args.group_size}, N={args.num_adv_docs + 1} (including seed)")
     out_df = tgp.infer_poison_docs(
         model=model,
         tokenizer=tokenizer,
@@ -161,7 +161,7 @@ def main():
         gen_batch_size=args.gen_batch_size,
     )
 
-    # pipeline이 기대하는 컬럼명: doc0_seed (not doc0)
+    # Column name expected by the pipeline: doc0_seed (not doc0)
     out_df = out_df.rename(columns={"doc0": "doc0_seed"})
 
     # Post-hoc correction: fix digit fragmentation + ensure target answer is present
