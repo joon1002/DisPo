@@ -11,7 +11,6 @@ poison documents under No-Defense / RAGDefender defense, retrieving from the ful
 ```
 eval/
 ├── main_dipoison_fullcorpus_ragdef.py   # Main NQ/MS MARCO evaluation script (Table 1, 5)
-├── main_dipoison_fullcorpus_robustrag.py # RobustRAG evaluation
 ├── main_fullcorpus_ppl_filter.py         # Perplexity-filter defense (Figure 2)
 ├── multi_retriever_ragdef_eval.py        # 8-retriever comparison, NQ/MS MARCO (Table 3)
 ├── hotpotqa_merged_multihop_8ret_eval.py # 8-retriever comparison, HotpotQA (Table 3)
