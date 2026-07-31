@@ -1,4 +1,4 @@
-# DiPoison: Dispersion-Penalized Poison Document Generation
+# DiPoison- Divde and Poison : Dispersed RAG Poisoning Evades Similarity-Based Defenses
 
 GRPO 기반 RAG 악성 문서 생성 프레임워크.  
 Contriever 또는 E5를 화이트박스 검색기로 사용하여 Qwen2.5-1.5B 생성기를 강화학습으로 훈련하고, 100개 평가 쿼리에 대해 악성 문서를 생성 및 평가합니다.
