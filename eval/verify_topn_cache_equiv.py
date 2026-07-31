@@ -1,10 +1,10 @@
 """
-top-50 clean cache 기반 검색(retrieve_cached_topn_topk)과
-전체 corpus 직접 scoring(retrieve_fullcorpus_topk)이 쿼리별로
-동일한 top-k 문서를 뽑는지 직접 비교.
+Directly compares whether top-50 clean-cache-based retrieval
+(retrieve_cached_topn_topk) and direct full-corpus scoring
+(retrieve_fullcorpus_topk) select the same top-k documents per query.
 
-LLM 생성 단계는 거치지 않음 (do_sample=True 샘플링 노이즈를 배제하고
-순수 검색 결과만 비교하기 위함).
+Skips the LLM generation step (to exclude do_sample=True sampling noise
+and compare pure retrieval results only).
 """
 
 import argparse
@@ -56,7 +56,7 @@ def main():
 
         query_encode_fn = doc_encode_fn = encode_fn
     else:
-        raise NotImplementedError("이 검증 스크립트는 우선 contriever 계열만 지원합니다.")
+        raise NotImplementedError("This verification script currently only supports the contriever family.")
 
     print(f"[load] corpus: {cfg['corpus_path']}")
     corpus_texts = []
@@ -128,20 +128,20 @@ def main():
             })
 
     print("\n" + "=" * 60)
-    print(f"  총 쿼리 수:              {n_total}")
-    print(f"  top-k 문서 완전 일치:     {n_match_docs}/{n_total}")
-    print(f"  adv 위치(rank) 일치:      {n_match_positions}/{n_total}")
-    print(f"  poison_in_topk 개수 일치: {n_match_count}/{n_total}")
+    print(f"  Total queries:            {n_total}")
+    print(f"  top-k documents fully match: {n_match_docs}/{n_total}")
+    print(f"  adv position (rank) matches: {n_match_positions}/{n_total}")
+    print(f"  poison_in_topk count matches: {n_match_count}/{n_total}")
     print("=" * 60)
 
     if mismatches:
-        print(f"\n[불일치 {len(mismatches)}건 상세]")
+        print(f"\n[Details of {len(mismatches)} mismatches]")
         for m in mismatches[:10]:
             print(f"\n- query: {m['query'][:100]}")
             print(f"  full : poison_in_topk={m['full_poison_in_topk']} adv_pos={m['full_adv_positions']}")
             print(f"  cache: poison_in_topk={m['cache_poison_in_topk']} adv_pos={m['cache_adv_positions']}")
     else:
-        print("\n[결론] 모든 쿼리에서 top-50 캐시 기반 검색과 전체 corpus 검색 결과가 완전히 동일함.")
+        print("\n[Conclusion] Top-50 cache-based retrieval and full-corpus retrieval produce identical results for every query.")
 
 
 if __name__ == "__main__":
