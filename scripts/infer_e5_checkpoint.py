@@ -2,7 +2,7 @@
 """
 infer_e5_checkpoint.py
 
-E5 final_model에서 100 eval 쿼리에 대해 쿼리당 4개(doc0_seed+doc1~doc3) 생성.
+Generates 4 documents per query (doc0_seed+doc1~doc3) for the 100 eval queries from the E5 final_model.
 
 Usage:
   CUDA_VISIBLE_DEVICES=0 python scripts/infer_e5_checkpoint.py \
@@ -63,11 +63,11 @@ def parse_args():
     p.add_argument("--gpu_id",       type=int, default=0)
     p.add_argument("--group_size",   type=int, default=8)
     p.add_argument("--num_adv_docs", type=int, default=3,
-                   help="쿼리당 생성할 악성 문서 수 (N), 기본 3 → doc0_seed+doc1~doc3=4개")
+                   help="Number of poison documents to generate per query (N), default 3 -> doc0_seed+doc1~doc3=4 total")
     p.add_argument("--embed_device",   default="cuda")
     p.add_argument("--gen_batch_size", type=int, default=1,
-                   help="G 후보를 한 번에 몇 개씩 배치로 생성할지 (기본 1=순차). "
-                        "G와 같게 설정하면 가장 빠름.")
+                   help="How many of the G candidates to batch-generate at once (default 1=sequential). "
+                        "Fastest when set equal to G.")
     return p.parse_args()
 
 
@@ -77,7 +77,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"[gpu] {torch.cuda.get_device_name(0) if device=='cuda' else 'CPU'}")
 
-    # White-box 모델 로드 (E5 + MiniLM + Vicuna)
+    # Load white-box models (E5 + MiniLM + Vicuna)
     tgp_e5.init_whitebox_models(
         retrieval_model=tgp_e5.RETRIEVAL_MODEL,
         defense_model=tgp_e5.DEFENSE_MODEL,
@@ -88,7 +88,7 @@ def main():
         max_prompt_tokens=tgp_e5.MAX_PROMPT_TOKENS,
     )
 
-    # Generator (LoRA) 로드
+    # Load generator (LoRA)
     print(f"[load] Base: {tgp_e5.GENERATOR_MODEL}")
     tokenizer = AutoTokenizer.from_pretrained(args.checkpoint, use_fast=True)
     if tokenizer.pad_token is None:
@@ -105,7 +105,7 @@ def main():
     model.eval()
     model.requires_grad_(False)
 
-    # UncertaintyWeighter 로드
+    # Load UncertaintyWeighter
     uw = tgp_e5.UncertaintyWeighter(n_tasks=5).to(device)
     uw_path = os.path.join(args.checkpoint, "uncertainty_weighter.pt")
     if os.path.exists(uw_path):
@@ -115,13 +115,13 @@ def main():
         print("[warn] uncertainty_weighter.pt not found — using default weights")
     uw.eval()
 
-    # 데이터 로드 + TF-IDF fit
+    # Load data + fit TF-IDF
     df = pd.read_csv(args.input)
     print(f"[data] {len(df)} queries from {args.input}")
     tgp_e5.fit_tfidf(list(df["seed_doc"].astype(str)))
     print("[tfidf] fitted")
 
-    # 추론 (쿼리당 doc0_seed + doc1~doc3 = 4개)
+    # Inference (doc0_seed + doc1~doc3 = 4 documents per query)
     out_df = tgp_e5.infer_poison_docs(
         model=model,
         tokenizer=tokenizer,
