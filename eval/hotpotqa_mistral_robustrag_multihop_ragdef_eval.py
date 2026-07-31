@@ -207,15 +207,15 @@ def save_ragparadox_substring_excel(detail_df, out_dir):
 
     excel_df = pd.DataFrame({
         "#": range(1, len(detail_df) + 1),
-        "쿼리": detail_df["query"],
+        "Query": detail_df["query"],
         "Target Answer": detail_df["target_answer"],
         "Correct Answer": detail_df["correct_answer"],
-        "ND 최종 답변": detail_df["nd_response"],
-        "ND 공격 성공/실패": detail_df["nd_asr"].astype(bool).astype(int),
-        "RobustRAG 최종 답변": detail_df["rr_response"],
-        "RobustRAG 공격 성공/실패": detail_df["rr_asr"].astype(bool).astype(int),
-        "RD+RobustRAG 최종 답변": detail_df["rd_rr_response"],
-        "RD+RobustRAG 공격 성공/실패": detail_df["rd_rr_asr"].astype(bool).astype(int),
+        "ND Final Response": detail_df["nd_response"],
+        "ND Attack Success/Failure": detail_df["nd_asr"].astype(bool).astype(int),
+        "RobustRAG Final Response": detail_df["rr_response"],
+        "RobustRAG Attack Success/Failure": detail_df["rr_asr"].astype(bool).astype(int),
+        "RD+RobustRAG Final Response": detail_df["rd_rr_response"],
+        "RD+RobustRAG Attack Success/Failure": detail_df["rd_rr_asr"].astype(bool).astype(int),
     })
 
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
