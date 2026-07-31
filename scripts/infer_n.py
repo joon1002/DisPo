@@ -2,9 +2,9 @@
 """
 infer_n.py
 
-N개의 악성문서(seed doc 포함)를 생성하는 inference 스크립트.
-  --num_adv_docs N : seed doc 포함 총 N개 (doc0_seed + doc1 ~ doc{N-1})
-  내부적으로 tgp.infer_poison_docs(num_adv_docs=N-1)을 호출.
+Inference script that generates N poison documents (including the seed doc).
+  --num_adv_docs N : N total documents including the seed doc (doc0_seed + doc1 ~ doc{N-1})
+  Internally calls tgp.infer_poison_docs(num_adv_docs=N-1).
 
 Usage:
   CUDA_VISIBLE_DEVICES=2 HF_HUB_DISABLE_XET=1 PYTHONUNBUFFERED=1 \
@@ -65,14 +65,14 @@ def parse_args():
     p.add_argument("--gpu_id",      type=int, default=0)
     p.add_argument("--group_size",  type=int, default=8)
     p.add_argument("--num_adv_docs", type=int, default=4,
-                   help="seed doc 포함 총 악성문서 수 N (doc0_seed + doc1~doc{N-1}). "
-                        "예: N=4 → seed+doc1+doc2+doc3, N=2 → seed+doc1")
+                   help="Total poison documents N including the seed doc (doc0_seed + doc1~doc{N-1}). "
+                        "e.g. N=4 -> seed+doc1+doc2+doc3, N=2 -> seed+doc1")
     p.add_argument("--N", type=int, default=None,
-                   help="seed 포함 총 악성문서 수. 지정 시 --num_adv_docs 대신 사용 (동일 의미).")
+                   help="Total poison documents including the seed. Used instead of --num_adv_docs when set (same meaning).")
     p.add_argument("--embed_device",    default="cuda")
     p.add_argument("--gen_batch_size",  type=int, default=1,
-                   help="G 후보를 한 번에 몇 개씩 배치로 생성할지 (기본 1=순차). "
-                        "G와 같게 설정하면 G개를 한 번에 생성 → 가장 빠름.")
+                   help="How many of the G candidates to batch-generate at once (default 1=sequential). "
+                        "Fastest when set equal to G (generates all G candidates in one batch).")
     p.add_argument("--allow_train_input", action="store_true")
     return p.parse_args()
 
@@ -82,9 +82,9 @@ def _check_not_train_input(input_path: str):
     path_lower = input_path.lower()
     if any(kw in path_lower for kw in _TRAIN_KEYWORDS):
         sys.exit(
-            f"\n[GUARD] 훈련 쿼리 데이터셋 입력 거부: {input_path}\n"
-            "  inference는 평가용 nq100_validate.csv만 허용합니다.\n"
-            "  훈련 쿼리 inference가 정말 필요하면 --allow_train_input 플래그를 추가하세요.\n"
+            f"\n[GUARD] Refusing a training-query dataset as input: {input_path}\n"
+            "  Inference only allows the evaluation set nq100_validate.csv.\n"
+            "  If you genuinely need inference on training queries, add the --allow_train_input flag.\n"
         )
 
 def main():
@@ -96,12 +96,12 @@ def main():
 
     N = args.num_adv_docs
     if N < 2:
-        sys.exit("[ERROR] --num_adv_docs는 최소 2 이상이어야 합니다 (seed + 1개 이상).")
+        sys.exit("[ERROR] --num_adv_docs must be at least 2 (seed + at least 1 additional document).")
 
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"[gpu] Using {torch.cuda.get_device_name(0) if device=='cuda' else 'CPU'}")
-    print(f"[cfg] N={N} (seed doc 포함) → {N-1}개 추가 생성 (doc1~doc{N-1})")
+    print(f"[cfg] N={N} (including seed doc) -> generating {N-1} additional documents (doc1~doc{N-1})")
 
     tgp.init_whitebox_models(
         retrieval_model=tgp.RETRIEVAL_MODEL,
@@ -143,8 +143,8 @@ def main():
     tgp.fit_tfidf(list(df["seed_doc"].astype(str)))
     print("[tfidf] Vectorizer fitted")
 
-    # N-1개 추가 생성 (seed 제외). paper §3.2-3.3: Stage 2 정책으로 순차 생성 → Stage 3 주입 직전 산출물
-    print(f"[cfg] gen_batch_size={args.gen_batch_size} (G={args.group_size}개 후보 중 {args.gen_batch_size}개씩 배치 생성)")
+    # Generates N-1 additional documents (excluding the seed). Paper §3.2-3.3: Stage 2 policy generates sequentially -> the artifact right before Stage 3 injection
+    print(f"[cfg] gen_batch_size={args.gen_batch_size} (batches of {args.gen_batch_size} out of {args.group_size} G candidates)")
     out_df = tgp.infer_poison_docs(
         model=model,
         tokenizer=tokenizer,
