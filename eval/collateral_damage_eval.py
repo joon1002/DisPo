@@ -70,7 +70,7 @@ def main():
     cfg = _DS_CFG[args.dataset]
     model_hf_name = _RETRIEVAL_ALIAS["contriever"]
 
-    print(f"[load] corpus 로딩: {cfg['corpus_path']}")
+    print(f"[load] Loading corpus: {cfg['corpus_path']}")
     corpus_texts = []
     with open(cfg["corpus_path"]) as f:
         for line in f:
@@ -91,10 +91,10 @@ def main():
     corpus_embs = build_or_load_corpus_embs(
         corpus_texts, cache_path, encode_fn, print, batch_size=args.embed_batch,
     )
-    print(f"[embed] GPU 전송 중... ({corpus_embs.shape[0]:,} x {corpus_embs.shape[1]})")
+    print(f"[embed] Transferring to GPU... ({corpus_embs.shape[0]:,} x {corpus_embs.shape[1]})")
     corpus_embs_gpu = corpus_embs.half().to(device)
     n_corpus = corpus_embs_gpu.shape[0]
-    print(f"[embed] 완료. GPU mem: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+    print(f"[embed] Complete. GPU mem: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
     # ── poison docs (shared/global pool injected for every victim query) ──
     pdf = pd.read_csv(args.poison_docs_csv)
