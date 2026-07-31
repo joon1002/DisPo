@@ -30,7 +30,7 @@ from tqdm import tqdm
 _ROOT = Path(__file__).resolve().parent
 
 p = argparse.ArgumentParser()
-p.add_argument("--docs_csv",     default="../data/generated/pd_eval100_v7_cont_n4g8.csv")
+p.add_argument("--docs_csv",     default="../data/generated/pd_eval100_cont_n4g8.csv")
 p.add_argument("--corpus",       default="../data/corpus.jsonl")
 p.add_argument("--qrels_dir",    default="../data/eval/qrels")
 p.add_argument("--answers_json", default="../data/eval/nq.json")

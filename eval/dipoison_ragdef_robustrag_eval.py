@@ -37,7 +37,7 @@ if str(_ROOT) not in sys.path:
 from src.models import create_model
 from src.prompts import wrap_prompt as legacy_wrap_prompt
 
-_DATA_ROOT    = os.environ.get("DISPO_DATA_ROOT", "/path/to")
+_DATA_ROOT    = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
 _CORPUS_PATH  = f"{_DATA_ROOT}/datasets/nq/corpus.jsonl"
 _EMB_CACHE    = f"{_DATA_ROOT}/datasets/nq/contriever_embs_fullcorpus.pt"
 _DEFAULT_CSV  = "data/attackbaselines_pd/DiPoison/nq/dipoison4_nq100.csv"

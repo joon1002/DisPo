@@ -2,7 +2,7 @@
 Reranker Defense Experiment
 
 흐름:
-  1. pd_eval100_v7.csv 로드 (100쿼리 × 4 poison docs)
+  1. pd_eval100.csv 로드 (100쿼리 × 4 poison docs)
   2. BEIR NQ corpus에서 쿼리별 normal docs 추출
   3. Contriever로 top-k=5 retrieval
   4. cross-encoder/ms-marco-MiniLM-L-6-v2 로 reranking 점수 계산
@@ -24,7 +24,7 @@ from itertools import combinations
 
 # ─── argparse (서버별 경로 오버라이드) ──────────────────────────
 _p = argparse.ArgumentParser()
-_p.add_argument("--docs_csv",    default="/path/to/nq/results/grpo_whitebox_v7_1.5b_run1/pd_eval100_v7.csv")
+_p.add_argument("--docs_csv",    default="/path/to/nq/results/grpo_whitebox_1.5b_run1/pd_eval100.csv")
 _p.add_argument("--corpus",      default="/path/to/datasets/nq/corpus.jsonl")
 _p.add_argument("--qrels_dir",   default="/path/to/datasets/nq/qrels")
 _p.add_argument("--answers_json",default="/path/to/ragdef/RAGDefender/artifacts/results/target_queries/nq.json")

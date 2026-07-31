@@ -12,7 +12,7 @@ Fixed pipeline:
 Run:
 
 ```bash
-cd /path/to/DisPo
+cd /path/to/DiPoison
 scripts/supplementary/reranking/run_reranking_tinybert_l2.sh data/generated/your_attack.csv 0
 ```
 

@@ -6,8 +6,8 @@
 
 | Variant | Canonical CSV | Source run output | Rows | Poison columns | SHA256 |
 |---|---|---|---:|---|---|
-| v7-cont / Contriever | `data/generated/pd_eval100_v7_cont_n4g8.csv` | `/data/joonhyung/nq/results/grpo_whitebox_v7_1.5b_run1/pd_eval100_v7.csv` | 100 | `doc0_seed`, `doc1`, `doc2`, `doc3` | `e73157d4fa6b297214573b797a1b3efc69c10d7ed3a00dabca11cfabfdebebef` |
-| v7-e5 / E5-base | `data/generated/pd_eval100_v7_e5_n4g8.csv` | `/data/joonhyung/nq/results/grpo_whitebox_v7_e5_run2/pd_eval100_v7_e5_g8.csv` | 100 | `doc0_seed`, `doc1`, `doc2`, `doc3` | `6e5e7e69dbe14671cdb065ac82e1efdc195a475f4ca2c019f7a796735ba626f5` |
+| v7-cont / Contriever | `data/generated/pd_eval100_cont_n4g8.csv` | `/data/joonhyung/nq/results/grpo_whitebox_v7_1.5b_run1/pd_eval100_v7.csv` | 100 | `doc0_seed`, `doc1`, `doc2`, `doc3` | `e73157d4fa6b297214573b797a1b3efc69c10d7ed3a00dabca11cfabfdebebef` |
+| v7-e5 / E5-base | `data/generated/pd_eval100_e5_n4g8.csv` | `/data/joonhyung/nq/results/grpo_whitebox_v7_e5_run2/pd_eval100_v7_e5_g8.csv` | 100 | `doc0_seed`, `doc1`, `doc2`, `doc3` | `6e5e7e69dbe14671cdb065ac82e1efdc195a475f4ca2c019f7a796735ba626f5` |
 | merged seed | `data/generated/pd_eval100_merged_seed.csv` | `/data/joonhyung/nq/results/eval_csv/pd_eval100_v7_merged_g8.csv` | 100 | `doc0_seed`, `doc1` ... `doc6` | `c8299a404672586e68a873836d431070f8d6a60a9bd406dda1f4e3fed5b9a587` |
 | merged noseed | `data/generated/pd_eval100_merged_noseed.csv` | derived from merged seed by dropping `doc0_seed` | 100 | `doc1` ... `doc6` | `f3a36ad1d5d82adc918613738f03052208c19b700119dff49aa172006e5afd77` |
 

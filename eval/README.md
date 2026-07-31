@@ -1,6 +1,6 @@
-# DisPo 성능평가 가이드
+# DiPoison 성능평가 가이드
 
-No-Defense / RAGDefender 방어 하에서 DisPo 악성 문서의 공격 성공률(ASR)과 검색 지표(Precision/Recall/F1)를 측정합니다.
+No-Defense / RAGDefender 방어 하에서 DiPoison 악성 문서의 공격 성공률(ASR)과 검색 지표(Precision/Recall/F1)를 측정합니다.
 
 ---
 
@@ -8,7 +8,7 @@ No-Defense / RAGDefender 방어 하에서 DisPo 악성 문서의 공격 성공�
 
 ```
 eval/
-├── main_dispo_ragdef_beir.py   # 메인 평가 스크립트
+├── main_dipoison_ragdef_beir.py   # 메인 평가 스크립트
 ├── src/
 │   ├── models/                 # LLM 래퍼 (Vicuna, Llama, GPT, Mistral 등)
 │   ├── utils.py                # BEIR 코퍼스 로딩, 검색 유틸
@@ -43,7 +43,7 @@ BEIR NQ 데이터셋 자동 다운로드 (최초 실행 시):
 Candidate pool = poison_docs(N개) + BEIR NQ 정상 문서(4~124개)
 ```
 
-- **poison_docs**: DisPo로 생성한 악성 문서 (`data/generated/pd_eval100_v7_cont_n4g8.csv` 등)
+- **poison_docs**: DiPoison으로 생성한 악성 문서 (`data/generated/pd_eval100_cont_n4g8.csv` 등)
 - **정상 문서**: BEIR NQ 코퍼스에서 해당 쿼리의 golden passage와 같은 제목을 가진 모든 passage
 
 ### 2. 검색 (Retrieval)
@@ -106,11 +106,11 @@ RAGDefender (Xue et al., 2024) 2단계 방어를 적용한 후 LLM 평가:
 ```bash
 cd eval/
 
-CUDA_VISIBLE_DEVICES=0 python main_dispo_ragdef_beir.py \
+CUDA_VISIBLE_DEVICES=0 python main_dipoison_ragdef_beir.py \
     --retrieval_model   contriever \
     --model_config_path model_configs/vicuna7b_config.json \
     --model_name        vicuna \
-    --docs_csv          ../data/generated/pd_eval100_v7_cont_n4g8.csv \
+    --docs_csv          ../data/generated/pd_eval100_cont_n4g8.csv \
     --adv_per_query     4 \
     --top_k             5 \
     --gpu_id            0
@@ -122,11 +122,11 @@ CUDA_VISIBLE_DEVICES=0 python main_dispo_ragdef_beir.py \
 cd eval/
 
 for RETRIEVER in contriever contriever-msmarco ance dpr bge-base e5-base gte-base mpnet; do
-    CUDA_VISIBLE_DEVICES=0 python main_dispo_ragdef_beir.py \
+    CUDA_VISIBLE_DEVICES=0 python main_dipoison_ragdef_beir.py \
         --retrieval_model   $RETRIEVER \
         --model_config_path model_configs/vicuna7b_config.json \
         --model_name        vicuna \
-        --docs_csv          ../data/generated/pd_eval100_v7_cont_n4g8.csv \
+        --docs_csv          ../data/generated/pd_eval100_cont_n4g8.csv \
         --adv_per_query     4 \
         --top_k             5 \
         --run_label         v7_cont \
@@ -134,14 +134,14 @@ for RETRIEVER in contriever contriever-msmarco ance dpr bge-base e5-base gte-bas
 done
 ```
 
-### v7-e5 악성문서 평가
+### E5 악성문서 평가
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python main_dispo_ragdef_beir.py \
+CUDA_VISIBLE_DEVICES=0 python main_dipoison_ragdef_beir.py \
     --retrieval_model   e5-base \
     --model_config_path model_configs/vicuna7b_config.json \
     --model_name        vicuna \
-    --docs_csv          ../data/generated/pd_eval100_v7_e5_n4g8.csv \
+    --docs_csv          ../data/generated/pd_eval100_e5_n4g8.csv \
     --adv_per_query     4 \
     --top_k             5 \
     --run_label         v7_e5 \
@@ -152,11 +152,11 @@ CUDA_VISIBLE_DEVICES=0 python main_dispo_ragdef_beir.py \
 
 ```bash
 # LLaMA3-8B
-CUDA_VISIBLE_DEVICES=0 python main_dispo_ragdef_beir.py \
+CUDA_VISIBLE_DEVICES=0 python main_dipoison_ragdef_beir.py \
     --retrieval_model   contriever \
     --model_config_path model_configs/llama3_8b_config.json \
     --model_name        llama \
-    --docs_csv          ../data/generated/pd_eval100_v7_cont_n4g8.csv \
+    --docs_csv          ../data/generated/pd_eval100_cont_n4g8.csv \
     --adv_per_query     4 --top_k 5 --run_label v7_cont_gen-llama3_8b --gpu_id 0
 ```
 
@@ -203,4 +203,4 @@ CSV 주요 컬럼:
 
 - 논문: *RAGDefender: Defending Against Retrieval-Augmented Generation Poisoning Attacks* (Xue et al., 2024)
 - 방어 모델: `paraphrase-MiniLM-L6-v2` (SentenceTransformer)
-- 방어 로직 구현: `main_dispo_ragdef_beir.py` 내 `find_num_adv_agg_with_stage1()`, `top_similar_pairs()` 함수
+- 방어 로직 구현: `main_dipoison_ragdef_beir.py` 내 `find_num_adv_agg_with_stage1()`, `top_similar_pairs()` 함수

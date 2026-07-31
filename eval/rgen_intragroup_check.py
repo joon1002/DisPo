@@ -11,7 +11,7 @@ rgen_intragroup_check.py
 
 Usage:
   CUDA_VISIBLE_DEVICES=0 /path/to/nq/.venv/bin/python \
-    /path/to/DisPo/eval/rgen_intragroup_check.py
+    /path/to/DiPoison/eval/rgen_intragroup_check.py
 """
 import sys, math
 sys.path.insert(0, "/path/to/nq/scripts")
@@ -24,11 +24,11 @@ from scipy.stats import kendalltau
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
-import train_grpo_poison_v7 as v7
+import train_grpo_poison as tgp
 
 # ── 설정 ─────────────────────────────────────────────────────
-CKPT      = "/path/to/DisPo/results/grpo_v7_n2_q500_run1/final_model"
-INPUT_CSV = "/path/to/DisPo/data/nq_500_pd_7b.csv"
+CKPT      = "/path/to/DiPoison/results/grpo_n2_q500_run1/final_model"
+INPUT_CSV = "/path/to/DiPoison/data/nq_500_pd_7b.csv"
 N_QUERIES = 20     # 몇 개 query를 샘플링할지
 G         = 8      # group size (훈련과 동일)
 DEVICE    = "cuda"
@@ -42,11 +42,11 @@ _VSYS = (
 
 # ── Vicuna 로드 ───────────────────────────────────────────────
 print("[load] Vicuna-7B ...")
-vic_tok = AutoTokenizer.from_pretrained(v7.VICUNA_MODEL, use_fast=True)
+vic_tok = AutoTokenizer.from_pretrained(tgp.VICUNA_MODEL, use_fast=True)
 if vic_tok.pad_token is None:
     vic_tok.pad_token = vic_tok.eos_token
 vic_mod = AutoModelForCausalLM.from_pretrained(
-    v7.VICUNA_MODEL, torch_dtype=torch.float16, device_map={"": DEVICE}
+    tgp.VICUNA_MODEL, torch_dtype=torch.float16, device_map={"": DEVICE}
 )
 vic_mod.eval(); vic_mod.requires_grad_(False)
 print("[load] Vicuna done.")
@@ -57,7 +57,7 @@ gen_tok = AutoTokenizer.from_pretrained(CKPT, use_fast=True)
 if gen_tok.pad_token is None:
     gen_tok.pad_token = gen_tok.eos_token
 base = AutoModelForCausalLM.from_pretrained(
-    v7.GENERATOR_MODEL, torch_dtype=torch.float16, device_map="auto"
+    tgp.GENERATOR_MODEL, torch_dtype=torch.float16, device_map="auto"
 )
 gen_mod = PeftModel.from_pretrained(base, CKPT)
 gen_mod.eval(); gen_mod.requires_grad_(False)
@@ -79,17 +79,17 @@ def _rgen(prompt: str, target: str) -> float:
     return float(torch.sigmoid(torch.tensor(-nll + NLL_SHIFT)).item())
 
 def rgen_sa(doc, query, target):
-    p = v7._RAG_PROMPT.format(context=doc, question=query)
+    p = tgp._RAG_PROMPT.format(context=doc, question=query)
     return _rgen(p, target)
 
 def rgen_fc(doc, query, target):
-    raw = v7._RAG_PROMPT.format(context=doc, question=query)
+    raw = tgp._RAG_PROMPT.format(context=doc, question=query)
     p = f"{_VSYS} USER: {raw} ASSISTANT:"
     return _rgen(p, target)
 
 # ── 후보 생성 ─────────────────────────────────────────────────
 def gen_candidates(query, target, seed, prev_docs=[]):
-    prompt_text = v7.format_prompt(gen_tok, query, target, seed, prev_docs)
+    prompt_text = tgp.format_prompt(gen_tok, query, target, seed, prev_docs)
     enc = gen_tok(prompt_text, return_tensors="pt",
                   truncation=True, max_length=768).to(DEVICE)
     cands = []
@@ -97,12 +97,12 @@ def gen_candidates(query, target, seed, prev_docs=[]):
         for _ in range(G):
             out = gen_mod.generate(
                 **enc,
-                min_new_tokens=v7.MIN_NEW_TOKENS,
-                max_new_tokens=v7.MAX_NEW_TOKENS,
+                min_new_tokens=tgp.MIN_NEW_TOKENS,
+                max_new_tokens=tgp.MAX_NEW_TOKENS,
                 do_sample=True,
-                temperature=v7.TEMPERATURE,
-                top_p=v7.TOP_P,
-                repetition_penalty=v7.REPETITION_PEN,
+                temperature=tgp.TEMPERATURE,
+                top_p=tgp.TOP_P,
+                repetition_penalty=tgp.REPETITION_PEN,
                 pad_token_id=gen_tok.eos_token_id,
                 use_cache=False,
             )
@@ -113,7 +113,7 @@ def gen_candidates(query, target, seed, prev_docs=[]):
 
 # ── 메인 ─────────────────────────────────────────────────────
 df = pd.read_csv(INPUT_CSV)
-v7.fit_tfidf(list(df["seed_doc"].astype(str)))
+tgp.fit_tfidf(list(df["seed_doc"].astype(str)))
 
 sample = df.sample(N_QUERIES, random_state=42).reset_index(drop=True)
 

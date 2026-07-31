@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-train_grpo_poison_v7.py
+train_grpo_poison.py
 
 GRPO + Kendall loss training for RAG poison document generation.
 
@@ -20,9 +20,9 @@ GRPO + Kendall loss training for RAG poison document generation.
   L = L_grpo(adv_clipped) + λ_k · L_kendall_rank + L_uncert
 
 Usage:
-  CUDA_VISIBLE_DEVICES=0 python train_grpo_poison_v7.py \\
+  CUDA_VISIBLE_DEVICES=0 python train_grpo_poison.py \\
     --input          data/nq_500_pd_7b.csv \\
-    --output_dir     results/grpo_v7_run1 \\
+    --output_dir     results/grpo_run1 \\
     --generator_model Qwen/Qwen2.5-1.5B-Instruct \\
     --vicuna_model    lmsys/vicuna-7b-v1.3 \\
     --num_epochs 3 --group_size 8 --lora_r 16 --gpu_id 0
@@ -50,7 +50,7 @@ from sentence_transformers import SentenceTransformer
 # CONSTANTS / DEFAULTS
 # ─────────────────────────────────────────────────────────
 DEFAULT_INPUT     = "data/nq_500_pd_7b.csv"
-DEFAULT_OUTPUT    = "results/grpo_v7_run1"
+DEFAULT_OUTPUT    = "results/grpo_run1"
 GENERATOR_MODEL   = "Qwen/Qwen2.5-1.5B-Instruct"
 RETRIEVAL_MODEL   = "facebook/contriever"
 DEFENSE_MODEL     = "paraphrase-MiniLM-L6-v2"

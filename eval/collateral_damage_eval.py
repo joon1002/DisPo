@@ -11,7 +11,7 @@ in the same process/run, so the delta isolates the injection effect rather
 than cross-run generation stochasticity.
 
 Usage:
-  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 DISPO_DATA_ROOT=/path/to \
+  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 DIPOISON_DATA_ROOT=/path/to \
     PYTHONUNBUFFERED=1 python eval/collateral_damage_eval.py \
     --victim_queries_csv data/generated/nq_clean_acc/clean_acc100.csv \
     --poison_docs_csv data/attackbaselines_pd/DiPoison/dipoison4_nq100.csv \
@@ -34,7 +34,7 @@ _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from main_dispo_fullcorpus_ragdef import (
+from main_dipoison_fullcorpus_ragdef import (
     _DS_CFG, _RETRIEVAL_ALIAS, _cache_path_for, build_or_load_corpus_embs,
     contriever_encode, clean_str,
 )
@@ -47,6 +47,7 @@ _DOC_COLS = ["doc0_seed", "doc1", "doc2", "doc3", "doc4", "doc5", "doc6"]
 
 def main():
     p = argparse.ArgumentParser()
+    p.add_argument("--dataset", type=str, default="nq", choices=["nq", "hotpotqa"])
     p.add_argument("--victim_queries_csv", type=str,
                    default="data/generated/nq_clean_acc/clean_acc100.csv")
     p.add_argument("--poison_docs_csv", type=str,
@@ -66,7 +67,7 @@ def main():
     device = f"cuda:{torch.cuda.current_device()}"
     print(f"[device] {device}")
 
-    cfg = _DS_CFG["nq"]
+    cfg = _DS_CFG[args.dataset]
     model_hf_name = _RETRIEVAL_ALIAS["contriever"]
 
     print(f"[load] corpus 로딩: {cfg['corpus_path']}")

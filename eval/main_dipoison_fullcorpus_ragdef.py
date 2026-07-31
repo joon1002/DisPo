@@ -1,5 +1,5 @@
 """
-main_dispo_fullcorpus_ragdef.py — Full-corpus retrieval + RAGDefender eval
+main_dipoison_fullcorpus_ragdef.py — Full-corpus retrieval + RAGDefender eval
 
 PoisonedRAG 논문 기준: 전체 corpus (NQ 2.6M / HotpotQA 5.2M) 에 adv docs 주입 후
 retriever로 전체 코퍼스에서 top-k 검색 → RAGDefender 2-stage → Vicuna-7B → ASR 측정.
@@ -15,13 +15,13 @@ Supported retrievers (--retrieval_model):
   mpnet              sentence-transformers/all-mpnet-base-v2
 
 Usage (NQ):
-  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 python eval/main_dispo_fullcorpus_ragdef.py \\
+  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 python eval/main_dipoison_fullcorpus_ragdef.py \\
     --dataset nq --retrieval_model contriever \\
     --docs_csv data/generated/pd_eval300_cont.csv \\
     --top_k 5 --adv_per_query 4 --gpu_id 0
 
 Usage (NQ, e5-base):
-  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 python eval/main_dispo_fullcorpus_ragdef.py \\
+  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 python eval/main_dipoison_fullcorpus_ragdef.py \\
     --dataset nq --retrieval_model e5-base \\
     --docs_csv data/generated/pd_eval300_cont.csv \\
     --top_k 5 --adv_per_query 4 --gpu_id 0
@@ -60,8 +60,8 @@ from src.prompts import wrap_prompt as legacy_wrap_prompt
 from src.prompts import wrap_prompt_llama as legacy_wrap_prompt_llama
 
 # 서버마다 대용량 데이터 저장 위치가 다를 수 있어 환경변수로 override 가능
-# (예: export DISPO_DATA_ROOT=/path/to)
-_DATA_ROOT = os.environ.get("DISPO_DATA_ROOT", "/path/to")
+# (예: export DIPOISON_DATA_ROOT=/path/to)
+_DATA_ROOT = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
 
 # ── Dataset 설정 ──────────────────────────────────────────────────────────────
 _DS_CFG = {
@@ -343,7 +343,7 @@ def retrieve_cached_topn_topk(query, adv_docs, clean_topn_cache, corpus_texts,
 
 # ── Generator prompt ──────────────────────────────────────────────────────────
 def build_generator_prompt(model_name, question, docs):
-    """Use the same prompt construction as main_dispo_ragdef_beir.py."""
+    """Use the same prompt construction as main_dipoison_ragdef_beir.py."""
     if "llama" in str(model_name).lower():
         return legacy_wrap_prompt_llama(question, docs, 4)
     return legacy_wrap_prompt(question, docs, 4)

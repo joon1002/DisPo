@@ -38,7 +38,7 @@ _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from main_dispo_fullcorpus_ragdef import (  # noqa: E402
+from main_dipoison_fullcorpus_ragdef import (  # noqa: E402
     _CONTRIEVER_FAMILY,
     _DEFAULT_MODEL_CONFIG,
     _DS_CFG,

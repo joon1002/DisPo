@@ -4,7 +4,7 @@ RAGParadox 공격 문서 CSV의 target_answer 컬럼 정제.
 
 RAGParadox 소스 데이터는 target_answer가 종종 파이썬 리스트/따옴표 repr
 문자열 그대로 저장되어 있다 (예: "['Two years']", "'Harry Nilsson'",
-'"Fat Lady"'). main_dispo_fullcorpus_ragdef.py의 ASR 판정은 target_answer와
+'"Fat Lady"'). main_dipoison_fullcorpus_ragdef.py의 ASR 판정은 target_answer와
 생성된 답변 사이의 순수 문자열 포함 여부만 검사하므로(.strip()만 하고 그
 외 가공 없음), 이 래핑 문자가 남아있으면 공격이 실제로 성공했어도 항상
 매치 실패로 집계되어 ASR이 실제보다 낮게 나온다.

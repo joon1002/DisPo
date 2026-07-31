@@ -81,13 +81,13 @@ def check_asr(target_answer, response):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--queries_csv", type=str,
-                        default="/path/to/DisPo/data/generated/hotpotqa/poisonedrag4_hotpot100.csv")
+                        default="/path/to/DiPoison/data/generated/hotpotqa/poisonedrag4_hotpot100.csv")
     parser.add_argument("--gpu_id",  type=int, default=0)
     parser.add_argument("--top_k",   type=int, default=5)
     parser.add_argument("--ret_top_n", type=int, default=50,
                         help="corpus에서 먼저 뽑을 후보 수 (adv docs와 merge 후 top_k)")
     parser.add_argument("--out_dir", type=str,
-                        default="/path/to/DisPo/eval/results/hotpotqa_adv_acc_poisonedrag")
+                        default="/path/to/DiPoison/eval/results/hotpotqa_adv_acc_poisonedrag")
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)

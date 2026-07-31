@@ -21,7 +21,7 @@ def parse_args():
     p.add_argument("--gpu_id", type=int, default=1)
     p.add_argument("--batch_size", type=int, default=16)
     p.add_argument("--max_length", type=int, default=512)
-    p.add_argument("--output_dir", default="/path/to/DisPo/eval/ppl_gpt2xl_clean_nq10k")
+    p.add_argument("--output_dir", default="/path/to/DiPoison/eval/ppl_gpt2xl_clean_nq10k")
     p.add_argument("--local_files_only", action="store_true")
     return p.parse_args()
 

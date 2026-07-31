@@ -52,7 +52,7 @@ from multi_retriever_ragdef_eval import (  # noqa: E402
 
 HOTPOTQA_CORPUS = "/path/to/datasets/hotpotqa/corpus.jsonl"
 DEFAULT_DOCS_CSV = (
-    "/path/to/DisPo/data/attackbaselines_pd/DiPoison/merged/"
+    "/path/to/DiPoison/data/attackbaselines_pd/DiPoison/merged/"
     "hotpotqa_merged_dipoison.csv"
 )
 DEFAULT_CACHE_DIR = str(_ROOT / "clean_topn_cache/hotpotqa_merged_val100_top50")

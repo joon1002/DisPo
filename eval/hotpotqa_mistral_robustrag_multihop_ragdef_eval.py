@@ -41,15 +41,15 @@ from hotpotqa_multihop_ragdef_v2_eval import (  # noqa: E402
     ragdefender_multihop,
     wrap_prompt,
 )
-from main_dispo_fullcorpus_ragdef import contriever_encode  # noqa: E402
+from main_dipoison_fullcorpus_ragdef import contriever_encode  # noqa: E402
 
 
 ATTACKS = {
-    "PoisonedRAG": "/path/to/DisPo/data/attackbaselines_pd/PoisonedRAG/hotpotqa/poisonedrag4_hotpot100.csv",
-    "Joint-GCG": "/path/to/DisPo/data/attackbaselines_pd/jointgcg/hotpotqa/hotpotqa_origin_jointgcg_v2_n4.csv",
-    "Confundo": "/path/to/DisPo/data/attackbaselines_pd/confundo/hotpotqa/confundo_hotpotqa_N4.csv",
-    "RAGParadox": "/path/to/DisPo/data/attackbaselines_pd/RAGParadox/hotpotqa/hotpotqa_ragparadox_n4.csv",
-    "DiPoison": "/path/to/DisPo/data/attackbaselines_pd/DiPoison/hotpotqa/dipoison4_hotpot100.csv",
+    "PoisonedRAG": "/path/to/DiPoison/data/attackbaselines_pd/PoisonedRAG/hotpotqa/poisonedrag4_hotpot100.csv",
+    "Joint-GCG": "/path/to/DiPoison/data/attackbaselines_pd/jointgcg/hotpotqa/hotpotqa_origin_jointgcg_v2_n4.csv",
+    "Confundo": "/path/to/DiPoison/data/attackbaselines_pd/confundo/hotpotqa/confundo_hotpotqa_N4.csv",
+    "RAGParadox": "/path/to/DiPoison/data/attackbaselines_pd/RAGParadox/hotpotqa/hotpotqa_ragparadox_n4.csv",
+    "DiPoison": "/path/to/DiPoison/data/attackbaselines_pd/DiPoison/hotpotqa/dipoison4_hotpot100.csv",
 }
 
 _ISOLATION_PROMPT = (
@@ -142,8 +142,8 @@ def robustrag_keyword_agg(question, topk_docs, llm, alpha=0.3, beta=3, abstentio
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--corpus_path", default="/path/to/datasets/hotpotqa/corpus.jsonl")
-    p.add_argument("--clean_topn_cache", default="/path/to/DisPo/eval/clean_topn_cache/hotpotqa_5attacks_top50/contriever_top50.pt")
-    p.add_argument("--output_dir", default="/path/to/DisPo/eval/results/hotpotqa_mistral_robustrag_multihop_ragdef")
+    p.add_argument("--clean_topn_cache", default="/path/to/DiPoison/eval/clean_topn_cache/hotpotqa_5attacks_top50/contriever_top50.pt")
+    p.add_argument("--output_dir", default="/path/to/DiPoison/eval/results/hotpotqa_mistral_robustrag_multihop_ragdef")
     p.add_argument("--substring_dir", default="/path/to/nq/results/eval_csv/substring_result/hotpotragparadox")
     p.add_argument("--defense_model", default="paraphrase-MiniLM-L6-v2")
     p.add_argument("--generator_model", default=GENERATOR_MODELS["mistral"])

@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-infer_v7_abl_checkpoint.py
+infer_abl_checkpoint.py
 
-v7-abl final_model에서 nq100_validate 100개 쿼리에 대해 poison docs 생성.
+abl final_model에서 nq100_validate 100개 쿼리에 대해 poison docs 생성.
 --ablation 인자로 훈련 시 사용한 ablation 모드를 지정해야 함 (UW 로드 시 n_tasks 맞춤).
 
 Usage:
-  CUDA_VISIBLE_DEVICES=0 /path/to/DisPo/.venv/bin/python \\
-    /path/to/DisPo/scripts/infer_v7_abl_checkpoint.py \\
+  CUDA_VISIBLE_DEVICES=0 /path/to/DiPoison/.venv/bin/python \\
+    /path/to/DiPoison/scripts/infer_abl_checkpoint.py \\
     --ablation no_disp_embed \\
-    --checkpoint /path/to/DisPo/data/final_model_abl_nodisp \\
-    --output    /path/to/DisPo/data/generated/pd_eval100_v7_abl_no_disp_g8_b4.csv \\
+    --checkpoint /path/to/DiPoison/data/final_model_abl_nodisp \\
+    --output    /path/to/DiPoison/data/generated/pd_eval100_abl_no_disp_g8_b4.csv \\
     --gpu_id [gpu_id] --group_size 8 --gen_batch_size 4 --N 4
 """
 import argparse, json, os, re, sys
@@ -24,7 +24,7 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-import train_grpo_poison_v7_abl as v7abl
+import train_grpo_poison_abl as tgp_abl
 
 
 def _correct_numbers(doc: str, target_answer: str) -> str:
@@ -72,7 +72,7 @@ def parse_args():
     p.add_argument("--group_size",  type=int, default=8)
     p.add_argument("--gen_batch_size", type=int, default=4,
                    help="한 번의 generate 호출에서 샘플링할 후보 수. 기본 4로 G=8 후보를 두 번에 나누어 생성.")
-    p.add_argument("--num_adv_docs", type=int, default=v7abl.DEFAULT_NUM_ADV_DOCS,
+    p.add_argument("--num_adv_docs", type=int, default=tgp_abl.DEFAULT_NUM_ADV_DOCS,
                    help="seed 제외 추가 생성 문서 수. 기본 3 -> 총 N=4. --N 지정 시 무시됨")
     p.add_argument("--N", type=int, default=None,
                    help="seed 포함 총 악성문서 수. 예: --N 4 -> doc0_seed+doc1~doc3")
@@ -89,30 +89,30 @@ def main():
     print(f"[gpu] Using {torch.cuda.get_device_name(0) if device=='cuda' else 'CPU'}")
     print(f"[ablation] {args.ablation}")
 
-    active_tasks = v7abl.get_active_tasks(args.ablation)
+    active_tasks = tgp_abl.get_active_tasks(args.ablation)
     print(f"[active_tasks] {active_tasks}")
     task_set = set(active_tasks)
 
-    v7abl.init_whitebox_models(
-        retrieval_model=v7abl.RETRIEVAL_MODEL,
-        defense_model=v7abl.DEFENSE_MODEL,
-        vicuna_model=v7abl.VICUNA_MODEL,
+    tgp_abl.init_whitebox_models(
+        retrieval_model=tgp_abl.RETRIEVAL_MODEL,
+        defense_model=tgp_abl.DEFENSE_MODEL,
+        vicuna_model=tgp_abl.VICUNA_MODEL,
         device=device,
         embed_device="cuda",
         vicuna_device=device,
-        max_prompt_tokens=v7abl.MAX_PROMPT_TOKENS,
+        max_prompt_tokens=tgp_abl.MAX_PROMPT_TOKENS,
         load_retrieval="retrieval" in task_set,
         load_defense="disp_embed" in task_set,
         load_vicuna=bool({"generation", "ppl"} & task_set),
     )
 
-    print(f"[load] Base model: {v7abl.GENERATOR_MODEL}")
+    print(f"[load] Base model: {tgp_abl.GENERATOR_MODEL}")
     tokenizer = AutoTokenizer.from_pretrained(args.checkpoint, use_fast=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     base_model = AutoModelForCausalLM.from_pretrained(
-        v7abl.GENERATOR_MODEL,
+        tgp_abl.GENERATOR_MODEL,
         torch_dtype=torch.float16,
         device_map={"": device},
         low_cpu_mem_usage=True,
@@ -122,7 +122,7 @@ def main():
     model.eval()
     model.requires_grad_(False)
 
-    uw = v7abl.UncertaintyWeighter(active_tasks=active_tasks).to(device)
+    uw = tgp_abl.UncertaintyWeighter(active_tasks=active_tasks).to(device)
     uw_path = os.path.join(args.checkpoint, "uncertainty_weighter.pt")
     if os.path.exists(uw_path):
         uw.load_state_dict(torch.load(uw_path, map_location=device))
@@ -133,22 +133,22 @@ def main():
 
     df = pd.read_csv(args.input)
     print(f"[data] {len(df)} queries from {args.input}")
-    v7abl.fit_tfidf(list(df["seed_doc"].astype(str)))
+    tgp_abl.fit_tfidf(list(df["seed_doc"].astype(str)))
     print("[tfidf] Vectorizer fitted")
 
     print(f"[cfg] G={args.group_size}, gen_batch_size={args.gen_batch_size}, "
           f"N={args.num_adv_docs + 1} (seed 포함)")
-    out_df = v7abl.infer_poison_docs(
+    out_df = tgp_abl.infer_poison_docs(
         model=model,
         tokenizer=tokenizer,
         uw=uw,
         df=df,
         G=args.group_size,
-        min_new=v7abl.MIN_NEW_TOKENS,
-        max_new=v7abl.MAX_NEW_TOKENS,
-        temp=v7abl.TEMPERATURE,
+        min_new=tgp_abl.MIN_NEW_TOKENS,
+        max_new=tgp_abl.MAX_NEW_TOKENS,
+        temp=tgp_abl.TEMPERATURE,
         device=device,
-        max_prompt_tokens=v7abl.MAX_PROMPT_TOKENS,
+        max_prompt_tokens=tgp_abl.MAX_PROMPT_TOKENS,
         num_adv_docs=args.num_adv_docs,
         gen_batch_size=args.gen_batch_size,
     )

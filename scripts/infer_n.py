@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-infer_v7_n.py
+infer_n.py
 
 N개의 악성문서(seed doc 포함)를 생성하는 inference 스크립트.
   --num_adv_docs N : seed doc 포함 총 N개 (doc0_seed + doc1 ~ doc{N-1})
-  내부적으로 v7.infer_poison_docs(num_adv_docs=N-1)을 호출.
+  내부적으로 tgp.infer_poison_docs(num_adv_docs=N-1)을 호출.
 
 Usage:
   CUDA_VISIBLE_DEVICES=2 HF_HUB_DISABLE_XET=1 PYTHONUNBUFFERED=1 \
-    .venv/bin/python scripts/infer_v7_n.py \
+    .venv/bin/python scripts/infer_n.py \
     --checkpoint results/<run>/final_model \
     --input  data/nq100_validate.csv \
-    --output results/<run>/pd_eval100_v7_n4.csv \
+    --output results/<run>/pd_eval100_n4.csv \
     --gpu_id 2 \
     --num_adv_docs 4
 """
@@ -23,7 +23,7 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-import train_grpo_poison_v7 as v7
+import train_grpo_poison as tgp
 
 
 def _correct_numbers(doc: str, target_answer: str) -> str:
@@ -59,9 +59,9 @@ def _fix_doc(doc: str, target_answer: str) -> str:
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--checkpoint",  default="results/grpo_v7_run1/final_model")
+    p.add_argument("--checkpoint",  default="results/grpo_run1/final_model")
     p.add_argument("--input",       default="data/nq100_validate.csv")
-    p.add_argument("--output",      default="results/grpo_v7_run1/pd_eval100_v7_n4.csv")
+    p.add_argument("--output",      default="results/grpo_run1/pd_eval100_n4.csv")
     p.add_argument("--gpu_id",      type=int, default=0)
     p.add_argument("--group_size",  type=int, default=8)
     p.add_argument("--num_adv_docs", type=int, default=4,
@@ -103,23 +103,23 @@ def main():
     print(f"[gpu] Using {torch.cuda.get_device_name(0) if device=='cuda' else 'CPU'}")
     print(f"[cfg] N={N} (seed doc 포함) → {N-1}개 추가 생성 (doc1~doc{N-1})")
 
-    v7.init_whitebox_models(
-        retrieval_model=v7.RETRIEVAL_MODEL,
-        defense_model=v7.DEFENSE_MODEL,
-        vicuna_model=v7.VICUNA_MODEL,
+    tgp.init_whitebox_models(
+        retrieval_model=tgp.RETRIEVAL_MODEL,
+        defense_model=tgp.DEFENSE_MODEL,
+        vicuna_model=tgp.VICUNA_MODEL,
         device=device,
         embed_device=args.embed_device,
         vicuna_device=device,
-        max_prompt_tokens=v7.MAX_PROMPT_TOKENS,
+        max_prompt_tokens=tgp.MAX_PROMPT_TOKENS,
     )
 
-    print(f"[load] Base model: {v7.GENERATOR_MODEL}")
+    print(f"[load] Base model: {tgp.GENERATOR_MODEL}")
     tokenizer = AutoTokenizer.from_pretrained(args.checkpoint, use_fast=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     base_model = AutoModelForCausalLM.from_pretrained(
-        v7.GENERATOR_MODEL,
+        tgp.GENERATOR_MODEL,
         torch_dtype=torch.float16,
         device_map={"": device},
         low_cpu_mem_usage=True,
@@ -129,7 +129,7 @@ def main():
     model.eval()
     model.requires_grad_(False)
 
-    uw = v7.UncertaintyWeighter(n_tasks=5).to(device)
+    uw = tgp.UncertaintyWeighter(n_tasks=5).to(device)
     uw_path = os.path.join(args.checkpoint, "uncertainty_weighter.pt")
     if os.path.exists(uw_path):
         uw.load_state_dict(torch.load(uw_path, map_location=device))
@@ -140,22 +140,22 @@ def main():
 
     df = pd.read_csv(args.input)
     print(f"[data] {len(df)} queries from {args.input}")
-    v7.fit_tfidf(list(df["seed_doc"].astype(str)))
+    tgp.fit_tfidf(list(df["seed_doc"].astype(str)))
     print("[tfidf] Vectorizer fitted")
 
     # N-1개 추가 생성 (seed 제외). paper §3.2-3.3: Stage 2 정책으로 순차 생성 → Stage 3 주입 직전 산출물
     print(f"[cfg] gen_batch_size={args.gen_batch_size} (G={args.group_size}개 후보 중 {args.gen_batch_size}개씩 배치 생성)")
-    out_df = v7.infer_poison_docs(
+    out_df = tgp.infer_poison_docs(
         model=model,
         tokenizer=tokenizer,
         uw=uw,
         df=df,
         G=args.group_size,
-        min_new=v7.MIN_NEW_TOKENS,
-        max_new=v7.MAX_NEW_TOKENS,
-        temp=v7.TEMPERATURE,
+        min_new=tgp.MIN_NEW_TOKENS,
+        max_new=tgp.MAX_NEW_TOKENS,
+        temp=tgp.TEMPERATURE,
         device=device,
-        max_prompt_tokens=v7.MAX_PROMPT_TOKENS,
+        max_prompt_tokens=tgp.MAX_PROMPT_TOKENS,
         num_adv_docs=N - 1,
         gen_batch_size=args.gen_batch_size,
     )

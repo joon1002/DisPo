@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-infer_v7_e5_checkpoint.py
+infer_e5_checkpoint.py
 
-v7-E5 final_model에서 100 eval 쿼리에 대해 쿼리당 4개(doc0_seed+doc1~doc3) 생성.
+E5 final_model에서 100 eval 쿼리에 대해 쿼리당 4개(doc0_seed+doc1~doc3) 생성.
 
 Usage:
-  CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_e5_checkpoint.py \
-    --checkpoint results/grpo_v7_e5_run1/final_model \
+  CUDA_VISIBLE_DEVICES=0 python scripts/infer_e5_checkpoint.py \
+    --checkpoint results/grpo_e5_run1/final_model \
     --input  data/nq100_validate.csv \
-    --output results/grpo_v7_e5_run1/pd_eval100_v7_e5.csv \
+    --output results/grpo_e5_run1/pd_eval100_e5.csv \
     --gpu_id 0 --group_size 8
 """
 import argparse, json, os, re, sys
@@ -19,7 +19,7 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-import train_grpo_poison_v7_e5 as v7e5
+import train_grpo_poison_e5 as tgp_e5
 
 
 def _correct_numbers(doc: str, target_answer: str) -> str:
@@ -57,9 +57,9 @@ def _fix_doc(doc: str, target_answer: str) -> str:
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--checkpoint", default="results/grpo_v7_e5_run1/final_model")
+    p.add_argument("--checkpoint", default="results/grpo_e5_run1/final_model")
     p.add_argument("--input",      default="data/nq100_validate.csv")
-    p.add_argument("--output",     default="results/grpo_v7_e5_run1/pd_eval100_v7_e5.csv")
+    p.add_argument("--output",     default="results/grpo_e5_run1/pd_eval100_e5.csv")
     p.add_argument("--gpu_id",       type=int, default=0)
     p.add_argument("--group_size",   type=int, default=8)
     p.add_argument("--num_adv_docs", type=int, default=3,
@@ -78,24 +78,24 @@ def main():
     print(f"[gpu] {torch.cuda.get_device_name(0) if device=='cuda' else 'CPU'}")
 
     # White-box 모델 로드 (E5 + MiniLM + Vicuna)
-    v7e5.init_whitebox_models(
-        retrieval_model=v7e5.RETRIEVAL_MODEL,
-        defense_model=v7e5.DEFENSE_MODEL,
-        vicuna_model=v7e5.VICUNA_MODEL,
+    tgp_e5.init_whitebox_models(
+        retrieval_model=tgp_e5.RETRIEVAL_MODEL,
+        defense_model=tgp_e5.DEFENSE_MODEL,
+        vicuna_model=tgp_e5.VICUNA_MODEL,
         device=device,
         embed_device="cuda",
         vicuna_device=device,
-        max_prompt_tokens=v7e5.MAX_PROMPT_TOKENS,
+        max_prompt_tokens=tgp_e5.MAX_PROMPT_TOKENS,
     )
 
     # Generator (LoRA) 로드
-    print(f"[load] Base: {v7e5.GENERATOR_MODEL}")
+    print(f"[load] Base: {tgp_e5.GENERATOR_MODEL}")
     tokenizer = AutoTokenizer.from_pretrained(args.checkpoint, use_fast=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     base_model = AutoModelForCausalLM.from_pretrained(
-        v7e5.GENERATOR_MODEL,
+        tgp_e5.GENERATOR_MODEL,
         torch_dtype=torch.float16,
         device_map={"": device},
         low_cpu_mem_usage=True,
@@ -106,7 +106,7 @@ def main():
     model.requires_grad_(False)
 
     # UncertaintyWeighter 로드
-    uw = v7e5.UncertaintyWeighter(n_tasks=5).to(device)
+    uw = tgp_e5.UncertaintyWeighter(n_tasks=5).to(device)
     uw_path = os.path.join(args.checkpoint, "uncertainty_weighter.pt")
     if os.path.exists(uw_path):
         uw.load_state_dict(torch.load(uw_path, map_location=device))
@@ -118,21 +118,21 @@ def main():
     # 데이터 로드 + TF-IDF fit
     df = pd.read_csv(args.input)
     print(f"[data] {len(df)} queries from {args.input}")
-    v7e5.fit_tfidf(list(df["seed_doc"].astype(str)))
+    tgp_e5.fit_tfidf(list(df["seed_doc"].astype(str)))
     print("[tfidf] fitted")
 
     # 추론 (쿼리당 doc0_seed + doc1~doc3 = 4개)
-    out_df = v7e5.infer_poison_docs(
+    out_df = tgp_e5.infer_poison_docs(
         model=model,
         tokenizer=tokenizer,
         uw=uw,
         df=df,
         G=args.group_size,
-        min_new=v7e5.MIN_NEW_TOKENS,
-        max_new=v7e5.MAX_NEW_TOKENS,
-        temp=v7e5.TEMPERATURE,
+        min_new=tgp_e5.MIN_NEW_TOKENS,
+        max_new=tgp_e5.MAX_NEW_TOKENS,
+        temp=tgp_e5.TEMPERATURE,
         device=device,
-        max_prompt_tokens=v7e5.MAX_PROMPT_TOKENS,
+        max_prompt_tokens=tgp_e5.MAX_PROMPT_TOKENS,
         num_adv_docs=args.num_adv_docs,
         gen_batch_size=args.gen_batch_size,
     )

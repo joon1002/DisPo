@@ -20,7 +20,7 @@ _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-import main_dispo_fullcorpus_ragdef as fc
+import main_dipoison_fullcorpus_ragdef as fc
 
 
 def main():

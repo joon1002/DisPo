@@ -79,10 +79,10 @@ def check_acc(correct_answer, response):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--clean_csv", type=str,
-                        default="/path/to/DisPo/data/generated/hotpotqa/hotpotqa_clean100_seed42.csv",
+                        default="/path/to/DiPoison/data/generated/hotpotqa/hotpotqa_clean100_seed42.csv",
                         help="평가 쿼리 CSV (columns: query, answer)")
     parser.add_argument("--adv_csv", type=str,
-                        default="/path/to/DisPo/data/generated/hotpotqa/poisonedrag4_hotpot100.csv",
+                        default="/path/to/DiPoison/data/generated/hotpotqa/poisonedrag4_hotpot100.csv",
                         help="악성문서 CSV (다른 쿼리용, 글로벌 주입)")
     parser.add_argument("--adv_cols", nargs="+",
                         default=["doc0_seed", "doc1", "doc2", "doc3"],
@@ -92,7 +92,7 @@ def main():
     parser.add_argument("--ret_top_n", type=int, default=50,
                         help="corpus에서 먼저 뽑을 후보 수")
     parser.add_argument("--out_dir",   type=str,
-                        default="/path/to/DisPo/eval/results/hotpotqa_collateral_poisonedrag")
+                        default="/path/to/DiPoison/eval/results/hotpotqa_collateral_poisonedrag")
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)

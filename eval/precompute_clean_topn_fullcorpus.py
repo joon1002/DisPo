@@ -2,7 +2,7 @@
 Precompute clean-corpus top-N retrieval results for later poison-doc injection.
 
 This stores, per query and retriever, the clean corpus doc indices and scores
-computed with the same fp16 scoring path used by main_dispo_fullcorpus_ragdef.py.
+computed with the same fp16 scoring path used by main_dipoison_fullcorpus_ragdef.py.
 """
 
 import argparse
@@ -23,7 +23,7 @@ _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-import main_dispo_fullcorpus_ragdef as fc
+import main_dipoison_fullcorpus_ragdef as fc
 
 _RETRIEVAL_ALIAS = dict(getattr(fc, "_RETRIEVAL_ALIAS", {}))
 _RETRIEVAL_ALIAS.update({

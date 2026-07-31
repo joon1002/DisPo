@@ -55,10 +55,10 @@ By default, `--data_root /path/to` is expected. The scripts read:
 - `/path/to/datasets/nq/corpus.jsonl`
 - `/path/to/datasets/nq/contriever_embs_fullcorpus.pt`
 
-Set `DISPO_DATA_ROOT` or pass `--data_root` if the other server stores them elsewhere:
+Set `DIPOISON_DATA_ROOT` or pass `--data_root` if the other server stores them elsewhere:
 
 ```bash
-DISPO_DATA_ROOT=/path/to/data_root scripts/supplementary/robustrag/run_robustrag_mistral7b.sh data/generated/your_attack.csv 0
+DIPOISON_DATA_ROOT=/path/to/data_root scripts/supplementary/robustrag/run_robustrag_mistral7b.sh data/generated/your_attack.csv 0
 ```
 
 `contriever_embs_fullcorpus.pt` is the precomputed Contriever embedding cache for the full NQ corpus. Without it, the current supplementary scripts will not run.

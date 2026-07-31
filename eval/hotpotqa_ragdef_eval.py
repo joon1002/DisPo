@@ -9,7 +9,7 @@ NQ full corpus 방식과 동일한 retrieval 설정:
 
 Retrieval (ND · RD 동일, NQ full corpus 기준):
   - corpus 5.2M + adv n개 전체를 쿼리와 scoring → top-k 직접 선택
-  - (ret_top_n 사전 필터링 없음 — main_dispo_fullcorpus_ragdef.py NQ 방식과 동일)
+  - (ret_top_n 사전 필터링 없음 — main_dipoison_fullcorpus_ragdef.py NQ 방식과 동일)
 
 Defense (RD 전용):
   - Stage-1 : AgglomerativeClustering(n_clusters=2) + TF-IDF 보정 → adv 개수 추정
@@ -159,12 +159,12 @@ def ragdefender(docs, defense_model):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--queries_csv", type=str,
-                        default="/path/to/DisPo/data/generated/hotpotqa/poisonedrag4_hotpot100.csv")
+                        default="/path/to/DiPoison/data/generated/hotpotqa/poisonedrag4_hotpot100.csv")
     parser.add_argument("--gpu_id",      type=int, default=0)
     parser.add_argument("--top_k",       type=int, default=5)
     parser.add_argument("--defense_model", type=str, default="paraphrase-MiniLM-L6-v2")
     parser.add_argument("--out_dir",     type=str,
-                        default="/path/to/DisPo/eval/results/hotpotqa_ragdef_poisonedrag")
+                        default="/path/to/DiPoison/eval/results/hotpotqa_ragdef_poisonedrag")
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)

@@ -7,7 +7,7 @@ Retriever → [Reranker] → Generator 파이프라인으로 ASR 측정.
 Usage:
   cd eval/
   CUDA_VISIBLE_DEVICES=0 python reranker_asr_eval.py \
-      --docs_csv ../data/generated/pd_eval100_v7_cont_n4g8.csv \
+      --docs_csv ../data/generated/pd_eval100_cont_n4g8.csv \
       --rerankers "cross-encoder/ms-marco-MiniLM-L-6-v2,cross-encoder/ms-marco-MiniLM-L-12-v2,BAAI/bge-reranker-base" \
       --gpu_id 0
 """
@@ -28,7 +28,7 @@ _ROOT = Path(__file__).resolve().parent
 # ─── argparse ────────────────────────────────────────────────
 p = argparse.ArgumentParser()
 p.add_argument("--docs_csv",
-    default="../data/generated/pd_eval100_v7_cont_n4g8.csv")
+    default="../data/generated/pd_eval100_cont_n4g8.csv")
 p.add_argument("--corpus",
     default="../data/corpus.jsonl")
 p.add_argument("--qrels_dir",

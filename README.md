@@ -1,7 +1,7 @@
-# DisPo: Dispersion-Penalized Poison Document Generation
+# DiPoison: Dispersion-Penalized Poison Document Generation
 
 GRPO 기반 RAG 악성 문서 생성 프레임워크.  
-Contriever(v7) 또는 E5(v7-e5)를 화이트박스 검색기로 사용하여 Qwen2.5-1.5B 생성기를 강화학습으로 훈련하고, 100개 평가 쿼리에 대해 악성 문서를 생성 및 평가합니다.
+Contriever 또는 E5를 화이트박스 검색기로 사용하여 Qwen2.5-1.5B 생성기를 강화학습으로 훈련하고, 100개 평가 쿼리에 대해 악성 문서를 생성 및 평가합니다.
 
 ---
 
@@ -10,8 +10,8 @@ Contriever(v7) 또는 E5(v7-e5)를 화이트박스 검색기로 사용하여 Qwe
 ### 1. 레포 클론
 
 ```bash
-git clone https://github.com/joon1002/DisPo.git
-cd DisPo
+git clone https://github.com/joon1002/DiPoison.git
+cd DiPoison
 ```
 
 ### 2. Python 환경 구성
@@ -29,31 +29,31 @@ pip install beir
 pip install fschat==0.2.36    # LLM(Vicuna-7B) 생성 단계에 필수 — 누락 시 ImportError
 ```
 
-### 3. 전체 흐름 (v7 기준, full-corpus 성능평가가 기본)
+### 3. 전체 흐름 (Contriever 기준, full-corpus 성능평가가 기본)
 
 ```bash
 # Step 1: 훈련 (GPU 0, ~8h)
-CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_v7.py \
+CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison.py \
     --input      data/nq_500_pd_7b.csv \
-    --output_dir results/grpo_v7_run1
+    --output_dir results/grpo_run1
 
 # Step 2: Inference (훈련 완료 후)
-CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_checkpoint.py \
-    --checkpoint results/grpo_v7_run1/final_model \
+CUDA_VISIBLE_DEVICES=0 python scripts/infer_checkpoint.py \
+    --checkpoint results/grpo_run1/final_model \
     --input      data/nq100_validate.csv \
-    --output     results/grpo_v7_run1/pd_eval100_v7.csv
+    --output     results/grpo_run1/pd_eval100.csv
 
 # Step 3: 성능평가 — full-corpus 방식이 기본(default)
 # (사전 준비: NQ/HotpotQA corpus 다운로드 — "직접 corpus를 받는 방법" 섹션 참고)
 cd eval/
-CUDA_VISIBLE_DEVICES=0 python main_dispo_fullcorpus_ragdef.py \
+CUDA_VISIBLE_DEVICES=0 python main_dipoison_fullcorpus_ragdef.py \
     --dataset         nq \
     --retrieval_model contriever \
-    --docs_csv        ../results/grpo_v7_run1/pd_eval100_v7.csv \
+    --docs_csv        ../results/grpo_run1/pd_eval100.csv \
     --adv_per_query   4 --top_k 5 --gpu_id 0
 ```
 
-> full-corpus가 기본 평가 방식입니다(실제 RAG 환경과 동일하게 전체 corpus에서 top-k 검색). `main_dispo_ragdef_beir.py`/`main_dispo_extraval_ragdef.py`는 쿼리당 소수 후보 문서끼리만 경쟁시키는 legacy 방식으로, 8검색기 비교 등 특수 목적에만 사용합니다.
+> full-corpus가 기본 평가 방식입니다(실제 RAG 환경과 동일하게 전체 corpus에서 top-k 검색). `main_dipoison_ragdef_beir.py`/`main_dipoison_extraval_ragdef.py`는 쿼리당 소수 후보 문서끼리만 경쟁시키는 legacy 방식으로, 8검색기 비교 등 특수 목적에만 사용합니다.
 > 성능평가 전체 가이드는 [eval/README.md](eval/README.md) 참고
 
 ---
@@ -61,12 +61,12 @@ CUDA_VISIBLE_DEVICES=0 python main_dispo_fullcorpus_ragdef.py \
 ## 구조
 
 ```
-DisPo/
+DiPoison/
 ├── scripts/
-│   ├── train_grpo_poison_v7.py        # v7 훈련 (Contriever + Vicuna-7B whitebox)
-│   ├── train_grpo_poison_v7_e5.py     # v7-e5 훈련 (E5-base + Vicuna-7B whitebox)
-│   ├── infer_v7_checkpoint.py         # v7 inference (LoRA 체크포인트 → poison docs CSV)
-│   ├── infer_v7_e5_checkpoint.py      # v7-e5 inference
+│   ├── train_grpo_poison.py        # 훈련 (Contriever + Vicuna-7B whitebox)
+│   ├── train_grpo_poison_e5.py     # E5 훈련 (E5-base + Vicuna-7B whitebox)
+│   ├── infer_checkpoint.py         # inference (LoRA 체크포인트 → poison docs CSV)
+│   ├── infer_e5_checkpoint.py      # E5 inference
 │   └── apply_number_correction.py     # Post-hoc 교정 (독립 실행 가능)
 ├── data/
 │   ├── nq100_validate.csv             # 평가용 100 쿼리 (고정)
@@ -103,8 +103,8 @@ pip install fschat==0.2.36
 모델 다운로드 (최초 실행 시 HuggingFace에서 자동):
 - Generator: `Qwen/Qwen2.5-1.5B-Instruct`
 - Surrogate LLM: `lmsys/vicuna-7b-v1.3`
-- Retriever(v7): `facebook/contriever`
-- Retriever(v7-e5): `intfloat/e5-base-v2`
+- Retriever(기본): `facebook/contriever`
+- Retriever(E5): `intfloat/e5-base-v2`
 - Defense filter: `paraphrase-MiniLM-L6-v2`
 - full-corpus 8검색기 비교 시 추가: `contriever-msmarco`, `sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base`(dpr),
   `sentence-transformers/msmarco-roberta-base-ance-firstp`(ance), `BAAI/bge-base-en-v1.5`(bge-base),
@@ -130,32 +130,32 @@ mv hotpotqa/corpus.jsonl hotpotqa/queries.jsonl hotpotqa/qrels .
 rm -rf hotpotqa hotpotqa.zip
 ```
 
-> `eval/main_dispo_fullcorpus_ragdef.py`의 `_DS_CFG`에 경로가 `/data/joonhyung/datasets/{nq,hotpotqa}/`로 고정되어 있으므로 반드시 이 경로에 둬야 합니다.
+> `eval/main_dipoison_fullcorpus_ragdef.py`의 `_DS_CFG`에 경로가 `/data/joonhyung/datasets/{nq,hotpotqa}/`로 고정되어 있으므로 반드시 이 경로에 둬야 합니다.
 
 ---
 
 ## 1. 훈련
 
-### v7 (Contriever + Vicuna-7B)
+### 기본 (Contriever + Vicuna-7B)
 
 ```bash
 # 기본 실행 (GPU 0, 500 쿼리, epoch=3, G=8, N=4)
-CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_v7.py \
+CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison.py \
     --input      data/nq_500_pd_7b.csv \
-    --output_dir results/grpo_v7_run1
+    --output_dir results/grpo_run1
 
 # 800 쿼리, epoch=3
-CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_v7.py \
+CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison.py \
     --input      data/nq_800_train.csv \
-    --output_dir results/grpo_v7_800q_run1
+    --output_dir results/grpo_800q_run1
 ```
 
-### v7-e5 (E5-base + Vicuna-7B)
+### E5 (E5-base + Vicuna-7B)
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_v7_e5.py \
+CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_e5.py \
     --input      data/nq_500_pd_7b.csv \
-    --output_dir results/grpo_v7_e5_run1
+    --output_dir results/grpo_e5_run1
 ```
 
 ### 주요 훈련 인자
@@ -163,7 +163,7 @@ CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_v7_e5.py \
 | 인자 | 기본값 | 설명 |
 |------|--------|------|
 | `--input` | `data/nq_500_pd_7b.csv` | 훈련 쿼리 CSV |
-| `--output_dir` | `results/grpo_v7_run1` | 체크포인트 저장 경로 |
+| `--output_dir` | `results/grpo_run1` | 체크포인트 저장 경로 |
 | `--num_epochs` | `3` | 훈련 epoch 수 |
 | `--group_size` | `8` | GRPO 그룹 크기 **(G)** — 쿼리당 생성 후보 수 |
 | `--num_adv_docs` | `3` | 쿼리당 최종 악성 문서 수 **(N)** — doc0_seed 제외, 총 N+1개 |
@@ -181,35 +181,35 @@ CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_v7_e5.py \
 훈련된 LoRA 체크포인트에서 100개 평가 쿼리에 대해 악성 문서 생성.  
 쿼리당 `doc0_seed`(시드 그대로) + `doc1~doc3`(생성 문서) = 4개.
 
-### v7
+### 기본
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_checkpoint.py \
-    --checkpoint    results/grpo_v7_run1/final_model \
+CUDA_VISIBLE_DEVICES=0 python scripts/infer_checkpoint.py \
+    --checkpoint    results/grpo_run1/final_model \
     --input         data/nq100_validate.csv \
-    --output        results/grpo_v7_run1/pd_eval100_v7.csv \
+    --output        results/grpo_run1/pd_eval100.csv \
     --group_size    8 \
     --gen_batch_size 8
 ```
 
-### v7-e5
+### E5
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_e5_checkpoint.py \
-    --checkpoint    results/grpo_v7_e5_run1/final_model \
+CUDA_VISIBLE_DEVICES=0 python scripts/infer_e5_checkpoint.py \
+    --checkpoint    results/grpo_e5_run1/final_model \
     --input         data/nq100_validate.csv \
-    --output        results/grpo_v7_e5_run1/pd_eval100_v7_e5.csv \
+    --output        results/grpo_e5_run1/pd_eval100_e5.csv \
     --group_size    8 \
     --gen_batch_size 8
 ```
 
-### v7-n (N 가변)
+### N 가변
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_n.py \
-    --checkpoint    results/grpo_v7_run1/final_model \
+CUDA_VISIBLE_DEVICES=0 python scripts/infer_n.py \
+    --checkpoint    results/grpo_run1/final_model \
     --input         data/nq100_validate.csv \
-    --output        results/grpo_v7_run1/pd_eval100_v7_n6.csv \
+    --output        results/grpo_run1/pd_eval100_n6.csv \
     --N 6 \
     --group_size    8 \
     --gen_batch_size 8
@@ -224,7 +224,7 @@ CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_n.py \
 | `--output` | `results/.../pd_eval100.csv` | 출력 CSV 경로 |
 | `--group_size` | `8` | 후보 생성 수 **(G)**, best 1개 선택 |
 | `--num_adv_docs` | `3` | 쿼리당 생성할 악성 문서 수 **(N)** |
-| `--N` | `None` | `--num_adv_docs`와 동일 의미, 지정 시 우선 적용 (`infer_v7_n.py`만) |
+| `--N` | `None` | `--num_adv_docs`와 동일 의미, 지정 시 우선 적용 (`infer_n.py`만) |
 | `--gen_batch_size` | `1` | G 후보를 한 번에 몇 개씩 생성할지. **`--group_size`와 동일값으로 설정하면 가장 빠름** |
 | `--embed_device` | `cuda` | 임베딩 모델 디바이스 |
 | `--gpu_id` | `0` | CUDA 디바이스 ID |
@@ -239,15 +239,15 @@ CUDA_VISIBLE_DEVICES=0 python scripts/infer_v7_n.py \
 
 ```bash
 python scripts/apply_number_correction.py \
-    --input  results/grpo_v7_run1/pd_eval100_v7.csv \
-    --output results/grpo_v7_run1/pd_eval100_v7_corrected.csv
+    --input  results/grpo_run1/pd_eval100.csv \
+    --output results/grpo_run1/pd_eval100_corrected.csv
 ```
 
 ---
 
 ## 하이퍼파라미터 상세
 
-### 공통 (v7 / v7-e5)
+### 공통 (기본 / E5)
 
 | 파라미터 | 값 | 설명 |
 |----------|-----|------|
@@ -281,9 +281,9 @@ python scripts/apply_number_correction.py \
 | r_generation | P(target \| context+query+Answer:) | Vicuna-7B가 정답을 낼 확률 |
 | r_ppl | sigmoid(−log(PPL/20)) | 문서 자연스러움 (낮은 perplexity) |
 
-### 차이점: v7 vs v7-e5
+### 차이점: 기본 vs E5
 
-| 항목 | v7 | v7-e5 |
+| 항목 | 기본 | E5 |
 |------|----|--------|
 | 화이트박스 검색기 | `facebook/contriever` (dot product) | `intfloat/e5-base-v2` (cosine) |
 | r_retrieval 기준 | (dot − 0.40) / 1.10 | (cos − 0.70) / 0.25 |

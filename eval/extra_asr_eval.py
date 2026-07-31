@@ -10,7 +10,7 @@ Usage:
   cd eval/
   HF_HUB_DISABLE_XET=1 PYTHONUNBUFFERED=1 CUDA_VISIBLE_DEVICES=0 \\
     /path/to/nq/.venv/bin/python3 extra_asr_eval.py \\
-    --docs_csv /path/to/nq/results/grpo_whitebox_v7_1.5b_run1/pd_eval100_v7.csv \\
+    --docs_csv /path/to/nq/results/grpo_whitebox_1.5b_run1/pd_eval100.csv \\
     --gpu_id 0
 """
 import argparse, gc, json, math, os, sys
@@ -30,7 +30,7 @@ _ROOT = Path(__file__).resolve().parent
 # ─── argparse ────────────────────────────────────────────────
 p = argparse.ArgumentParser()
 p.add_argument("--docs_csv",
-    default="/path/to/nq/results/grpo_whitebox_v7_1.5b_run1/pd_eval100_v7.csv")
+    default="/path/to/nq/results/grpo_whitebox_1.5b_run1/pd_eval100.csv")
 p.add_argument("--corpus",
     default="../data/corpus.jsonl")
 p.add_argument("--qrels_dir",

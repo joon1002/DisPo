@@ -6,7 +6,7 @@ Standalone vs FastChat r_generation 보상 신호 비교.
 훈련 없이 기존 docs로 두 포맷의 reward 분포 및 rank 상관관계를 측정.
 
 Usage:
-  /path/to/nq/.venv/bin/python /path/to/DisPo/eval/rgen_format_compare.py
+  /path/to/nq/.venv/bin/python /path/to/DiPoison/eval/rgen_format_compare.py
 """
 import math, sys
 import numpy as np
@@ -21,13 +21,13 @@ from scipy.stats import spearmanr
 VICUNA_MODEL   = "lmsys/vicuna-7b-v1.3"
 DEVICE         = "cuda:0"
 MAX_TOKENS     = 768
-NLL_SHIFT      = 2.0   # train_grpo_poison_v7.py 와 동일
+NLL_SHIFT      = 2.0   # train_grpo_poison.py 와 동일
 
-# 평가할 doc 파일 (v7cont N2 + v7e5)
+# 평가할 doc 파일 (cont N2 + e5)
 DOC_FILES = [
-    ("/path/to/DisPo/results/grpo_v7_n2_q500_run1/pd_eval100_N2_v2.csv",  "v7cont_v2", "doc0_seed"),
-    ("/path/to/DisPo/results/grpo_v7_n2_q500_run1/pd_eval100_N2_v2.csv",  "v7cont_v2_doc1", "doc1"),
-    ("/path/to/DisPo/data/generated/pd_eval100_v7e5_val_v2.csv",           "v7e5_v2",   "doc0_seed"),
+    ("/path/to/DiPoison/results/grpo_n2_q500_run1/pd_eval100_N2_v2.csv",  "cont_v2", "doc0_seed"),
+    ("/path/to/DiPoison/results/grpo_n2_q500_run1/pd_eval100_N2_v2.csv",  "cont_v2_doc1", "doc1"),
+    ("/path/to/DiPoison/data/generated/pd_eval100_e5_val_v2.csv",           "e5_v2",   "doc0_seed"),
 ]
 
 # Standalone 프롬프트 (훈련에서 사용하는 _RAG_PROMPT 와 동일)

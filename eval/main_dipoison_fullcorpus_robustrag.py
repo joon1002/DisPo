@@ -1,15 +1,15 @@
 """
-main_dispo_fullcorpus_robustrag.py — Full-corpus retrieval + RobustRAG KeywordAgg eval
+main_dipoison_fullcorpus_robustrag.py — Full-corpus retrieval + RobustRAG KeywordAgg eval
 
 Pipeline per query:
   1. Full-corpus Contriever retrieval (adv docs injected into 2.6M NQ corpus)
   2. No-Defense: standard RAG with top-k retrieved docs
   3. RobustRAG KeywordAgg: isolate per doc → keyword extraction → hint aggregation → final gen
 
-Usage (from DisPo/ directory):
-  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 python eval/main_dispo_fullcorpus_robustrag.py \\
+Usage (from DiPoison/ directory):
+  CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 python eval/main_dipoison_fullcorpus_robustrag.py \\
     --dataset nq --retrieval_model contriever \\
-    --docs_csv data/generated/pd_eval100_v7_cont_n4g8.csv \\
+    --docs_csv data/generated/pd_eval100_cont_n4g8.csv \\
     --top_k 5 --adv_per_query 4 --gpu_id 0
 """
 
@@ -50,7 +50,7 @@ from src.models import create_model
 from src.prompts import wrap_prompt as legacy_wrap_prompt
 from src.prompts import wrap_prompt_llama as legacy_wrap_prompt_llama
 
-_DATA_ROOT = os.environ.get("DISPO_DATA_ROOT", "/path/to")
+_DATA_ROOT = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
 
 _DS_CFG = {
     "nq": {

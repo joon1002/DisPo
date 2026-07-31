@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-train_grpo_poison_v7_abl.py
+train_grpo_poison_abl.py
 
-v7 기반 ablation study — 보상 함수 5개 중 하나씩 제거하여 기여도 측정.
+GRPO 기반 ablation study — 보상 함수 5개 중 하나씩 제거하여 기여도 측정.
 
-v7과 완전히 동일한 하이퍼파라미터, 보상 구조, 모델 설정.
+베이스라인과 완전히 동일한 하이퍼파라미터, 보상 구조, 모델 설정.
 단, --ablation 인자로 제거할 보상 함수 1개를 지정하면
   해당 보상을 UncertaintyWeighter 입력에서 제외 (4-task weighting).
   모든 5개 보상 값은 여전히 계산해서 로그에 기록 (비교 분석용).
 
 --ablation 선택지:
-  none          → 전체 v7 (베이스라인)
+  none          → 전체 보상 (베이스라인)
   no_retrieval  → r_retrieval 제외
   no_disp_embed → r_disp_embed 제외
   no_tfidf_disp → r_tfidf_disp 제외
@@ -25,9 +25,9 @@ v7과 완전히 동일한 하이퍼파라미터, 보상 구조, 모델 설정.
   no_ppl        → Eq.5 r_ppl(=r_flu) 제외 → Table 7 "w/o Fluency" 행
 
 Usage:
-  CUDA_VISIBLE_DEVICES=1 python scripts/train_grpo_poison_v7_abl.py \\
+  CUDA_VISIBLE_DEVICES=1 python scripts/train_grpo_poison_abl.py \\
     --ablation no_retrieval \\
-    --output_dir results/grpo_whitebox_v7_abl_no_ret_run1 \\
+    --output_dir results/grpo_whitebox_abl_no_ret_run1 \\
     --num_epochs 1 --group_size 8 --lora_r 16 --gpu_id 1
 """
 
@@ -55,7 +55,7 @@ from sentence_transformers import SentenceTransformer
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 DEFAULT_INPUT     = os.path.join(PROJECT_ROOT, "data", "nq_500_pd_7b.csv")
-DEFAULT_OUTPUT    = os.path.join(PROJECT_ROOT, "results", "grpo_whitebox_v7_abl_run1")
+DEFAULT_OUTPUT    = os.path.join(PROJECT_ROOT, "results", "grpo_whitebox_abl_run1")
 GENERATOR_MODEL   = "Qwen/Qwen2.5-1.5B-Instruct"
 
 # ── Ablation 설정 ────────────────────────────────────────
@@ -241,7 +241,7 @@ class UncertaintyWeighter(nn.Module):
 
     NOTE (paper-vs-code): 논문 Eq.6은 R0(d)=Σr_k를 "weight-free"로 정의하지만, 여기서는
     ablation으로 줄어든 active_tasks에 대해서도 학습되는 uncertainty weight를 사용한다
-    (train_grpo_poison_v7.py와 동일한 구조/불일치, 그 파일 참고).
+    (train_grpo_poison.py와 동일한 구조/불일치, 그 파일 참고).
     """
     def __init__(self, active_tasks: List[str]):
         super().__init__()
@@ -622,7 +622,7 @@ def train_position(
 
     최종 loss = l_grpo(Eq.8) + lam_k·l_kend(Eq.9-10) + uncert_loss
       → 논문 Eq.11에 uncert_loss(UncertaintyWeighter 정규화 항, 논문 수식에는 없음)가
-        추가된 형태 — train_grpo_poison_v7.py의 UncertaintyWeighter 주석 참고.
+        추가된 형태 — train_grpo_poison.py의 UncertaintyWeighter 주석 참고.
     """
     context_docs = [seed] + prev_docs
     prompt_text = format_prompt(tokenizer, query, target, seed, prev_docs)
@@ -867,7 +867,7 @@ def train(args) -> None:
     abl_tag      = args.ablation if args.ablation != "none" else "full"
 
     log_path = os.path.join(args.output_dir, "train_log.jsonl")
-    out_csv  = os.path.join(args.output_dir, f"pd_eval100_v7_abl_{abl_tag}.csv")
+    out_csv  = os.path.join(args.output_dir, f"pd_eval100_abl_{abl_tag}.csv")
 
     df = pd.read_csv(args.input)
     if args.limit:
@@ -905,23 +905,23 @@ def train(args) -> None:
         lr=args.lr, weight_decay=WEIGHT_DECAY,
     )
 
-    print(f"\n[config v7-abl] ablation         : {args.ablation}")
-    print(f"[config v7-abl] active_tasks     : {active_tasks}")
-    print(f"[config v7-abl] 생성기 (훈련)  : {args.generator_model}")
-    print(f"[config v7-abl] 검색기 (frozen) : {args.retrieval_model}")
-    print(f"[config v7-abl]   r_retrieval   : raw dot product → 선형정규화 [(dot-{DOT_FLOOR})/({DOT_CEILING}-{DOT_FLOOR})]")
-    print(f"[config v7-abl] 분산측정(frozen): {args.defense_model}")
-    print(f"[config v7-abl]   r_disp_embed  : 1 - MiniLM inter-cosine [Stage 2]")
-    print(f"[config v7-abl]   r_tfidf_disp  : 1 - TF-IDF inter-sim [Stage 1]")
-    print(f"[config v7-abl] 판단기 (frozen) : {args.vicuna_model}")
-    print(f"[config v7-abl]   r_generation  : P(target|RAG_prompt) / r_ppl : Vicuna PPL")
-    print(f"[config v7-abl] 패널티 방식     : additive (std 보존)")
-    print(f"[config v7-abl]   target_miss   : -= {TARGET_MISSING_PENALTY_ADD}")
-    print(f"[config v7-abl]   query_repeat  : += {QUERY_REPEAT_PENALTY} × (n-1)")
-    print(f"[config v7-abl]   doc_collapse  : = {COLLAPSE_PENALTY} (replacement)")
-    print(f"[config v7-abl] v7 수정사항:")
-    print(f"[config v7-abl]   ADV_CLIP={ADV_CLIP}  LR={args.lr:.0e}  GRAD_CLIP={GRAD_CLIP}")
-    print(f"[config v7-abl]   adv = clamp((r-mean)/std, -{ADV_CLIP}, {ADV_CLIP}) → overshooting 방지\n")
+    print(f"\n[config abl] ablation         : {args.ablation}")
+    print(f"[config abl] active_tasks     : {active_tasks}")
+    print(f"[config abl] 생성기 (훈련)  : {args.generator_model}")
+    print(f"[config abl] 검색기 (frozen) : {args.retrieval_model}")
+    print(f"[config abl]   r_retrieval   : raw dot product → 선형정규화 [(dot-{DOT_FLOOR})/({DOT_CEILING}-{DOT_FLOOR})]")
+    print(f"[config abl] 분산측정(frozen): {args.defense_model}")
+    print(f"[config abl]   r_disp_embed  : 1 - MiniLM inter-cosine [Stage 2]")
+    print(f"[config abl]   r_tfidf_disp  : 1 - TF-IDF inter-sim [Stage 1]")
+    print(f"[config abl] 판단기 (frozen) : {args.vicuna_model}")
+    print(f"[config abl]   r_generation  : P(target|RAG_prompt) / r_ppl : Vicuna PPL")
+    print(f"[config abl] 패널티 방식     : additive (std 보존)")
+    print(f"[config abl]   target_miss   : -= {TARGET_MISSING_PENALTY_ADD}")
+    print(f"[config abl]   query_repeat  : += {QUERY_REPEAT_PENALTY} × (n-1)")
+    print(f"[config abl]   doc_collapse  : = {COLLAPSE_PENALTY} (replacement)")
+    print(f"[config abl] 베이스 대비 수정사항:")
+    print(f"[config abl]   ADV_CLIP={ADV_CLIP}  LR={args.lr:.0e}  GRAD_CLIP={GRAD_CLIP}")
+    print(f"[config abl]   adv = clamp((r-mean)/std, -{ADV_CLIP}, {ADV_CLIP}) → overshooting 방지\n")
 
     log_fh = open(log_path, "w")
     total_steps = args.num_epochs * len(df)
@@ -1019,7 +1019,7 @@ def train(args) -> None:
 # ARGUMENT PARSER
 # ─────────────────────────────────────────────────────────
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="GRPO poison doc training v7")
+    p = argparse.ArgumentParser(description="GRPO poison doc training")
     p.add_argument("--input",           default=DEFAULT_INPUT)
     p.add_argument("--output_dir",      default=DEFAULT_OUTPUT)
     p.add_argument("--generator_model", default=GENERATOR_MODEL)
@@ -1054,7 +1054,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ablation", default="none",
                    choices=["none", "no_retrieval", "no_disp_embed",
                             "no_tfidf_disp", "no_generation", "no_ppl"],
-                   help="제거할 보상 함수. none=전체 v7 베이스라인.")
+                   help="제거할 보상 함수. none=전체 베이스라인.")
     args = p.parse_args()
     if args.N is not None:
         if args.N < 2:

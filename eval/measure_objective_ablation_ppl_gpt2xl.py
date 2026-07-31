@@ -18,12 +18,12 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 DEFAULT_ATTACKS = {
-    "dispo_full":   "/path/to/DisPo/data/generated/pd_eval100_v7_cont_n4g8.csv",
-    "abl_no_ret":   "/path/to/nq/results/grpo_whitebox_v7_abl_no_ret_run1/pd_eval100_v7_abl_no_ret_g8_b8.csv",
-    "abl_no_disp":  "/path/to/nq/results/grpo_whitebox_v7_abl_no_disp_run1/pd_eval100_v7_abl_no_disp.csv",
-    "abl_no_tfidf": "/path/to/nq/results/grpo_whitebox_v7_abl_no_tfidf_run1/pd_eval100_v7_abl_no_tfidf.csv",
-    "abl_no_gen":   "/path/to/nq/results/grpo_whitebox_v7_abl_no_gen_run1/pd_eval100_v7_abl_no_gen.csv",
-    "abl_no_ppl":   "/path/to/nq/results/grpo_whitebox_v7_abl_no_ppl_run1/pd_eval100_v7_abl_no_ppl.csv",
+    "dipoison_full":   "/path/to/DiPoison/data/generated/pd_eval100_cont_n4g8.csv",
+    "abl_no_ret":   "/path/to/nq/results/grpo_whitebox_abl_no_ret_run1/pd_eval100_abl_no_ret_g8_b8.csv",
+    "abl_no_disp":  "/path/to/nq/results/grpo_whitebox_abl_no_disp_run1/pd_eval100_abl_no_disp.csv",
+    "abl_no_tfidf": "/path/to/nq/results/grpo_whitebox_abl_no_tfidf_run1/pd_eval100_abl_no_tfidf.csv",
+    "abl_no_gen":   "/path/to/nq/results/grpo_whitebox_abl_no_gen_run1/pd_eval100_abl_no_gen.csv",
+    "abl_no_ppl":   "/path/to/nq/results/grpo_whitebox_abl_no_ppl_run1/pd_eval100_abl_no_ppl.csv",
 }
 
 
@@ -33,7 +33,7 @@ def parse_args():
     p.add_argument("--gpu_id", type=int, default=1)
     p.add_argument("--batch_size", type=int, default=16)
     p.add_argument("--max_length", type=int, default=512)
-    p.add_argument("--output_dir", default="/path/to/DisPo/eval/ppl_gpt2xl_objective_ablation")
+    p.add_argument("--output_dir", default="/path/to/DiPoison/eval/ppl_gpt2xl_objective_ablation")
     p.add_argument("--local_files_only", action="store_true")
     return p.parse_args()
 

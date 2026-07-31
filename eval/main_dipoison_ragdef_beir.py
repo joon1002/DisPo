@@ -1,12 +1,12 @@
 """
 [LEGACY] 쿼리당 소수 후보 문서(4~124개)끼리만 경쟁시키는 방식입니다.
-기본 성능평가는 main_dispo_fullcorpus_ragdef.py(full-corpus 검색)를 사용하세요.
+기본 성능평가는 main_dipoison_fullcorpus_ragdef.py(full-corpus 검색)를 사용하세요.
 이 스크립트는 8검색기 비교 등 특수 목적에만 사용합니다.
 
-main_dispo_ragdef_beir.py — RAGDefender pipeline evaluation
+main_dipoison_ragdef_beir.py — RAGDefender pipeline evaluation
 
 Data:
-  poison : pd_eval100_v7_cont_n4g8.csv  (DisPo whitebox 공격 문서)
+  poison : pd_eval100_cont_n4g8.csv  (DiPoison whitebox 공격 문서)
   normal : BEIR NQ corpus               (같은 title 전체 passage, 4~124개/쿼리)
 
 Pipeline per query:
@@ -25,31 +25,31 @@ Supported generators (via model_configs/):
 
 Usage (from eval/ directory):
   # Vicuna
-  CUDA_VISIBLE_DEVICES=0 python main_dispo_ragdef_beir.py \\
+  CUDA_VISIBLE_DEVICES=0 python main_dipoison_ragdef_beir.py \\
     --retrieval_model contriever \\
     --model_config_path model_configs/vicuna7b_config.json --model_name vicuna \\
-    --docs_csv ../data/generated/pd_eval100_v7_cont_n4g8.csv \\
+    --docs_csv ../data/generated/pd_eval100_cont_n4g8.csv \\
     --adv_per_query 4 --top_k 5 --gpu_id 0
 
   # Mistral
-  CUDA_VISIBLE_DEVICES=0 python main_dispo_ragdef_beir.py \\
+  CUDA_VISIBLE_DEVICES=0 python main_dipoison_ragdef_beir.py \\
     --retrieval_model e5-base \\
     --model_config_path model_configs/mistral7b_config.json --model_name mistral \\
-    --docs_csv ../data/generated/pd_eval100_v7_e5_n4g8.csv \\
+    --docs_csv ../data/generated/pd_eval100_e5_n4g8.csv \\
     --adv_per_query 4 --top_k 5 --gpu_id 0
 
   # LLaMA3
-  CUDA_VISIBLE_DEVICES=0 python main_dispo_ragdef_beir.py \\
+  CUDA_VISIBLE_DEVICES=0 python main_dipoison_ragdef_beir.py \\
     --retrieval_model contriever \\
     --model_config_path model_configs/llama3_8b_config.json --model_name llama3 \\
-    --docs_csv ../data/generated/pd_eval100_v7_cont_n4g8.csv \\
+    --docs_csv ../data/generated/pd_eval100_cont_n4g8.csv \\
     --adv_per_query 4 --top_k 5 --gpu_id 0
 
   # Qwen2.5
-  CUDA_VISIBLE_DEVICES=0 python main_dispo_ragdef_beir.py \\
+  CUDA_VISIBLE_DEVICES=0 python main_dipoison_ragdef_beir.py \\
     --retrieval_model contriever \\
     --model_config_path model_configs/qwen7b_config.json --model_name qwen2.5 \\
-    --docs_csv ../data/generated/pd_eval100_v7_cont_n4g8.csv \\
+    --docs_csv ../data/generated/pd_eval100_cont_n4g8.csv \\
     --adv_per_query 4 --top_k 5 --gpu_id 0
 """
 
@@ -97,7 +97,7 @@ CONFIG = {
     "use_llm_judge":         True,
     "top_k":                 5,
     "adv_per_query":         4,
-    "docs_csv":   "../data/generated/pd_eval100_v7_cont_n4g8.csv",
+    "docs_csv":   "../data/generated/pd_eval100_cont_n4g8.csv",
     "answers_json": "results/target_queries/nq.json",
     "eval_dataset":  "nq",
     "beir_split":    "test",

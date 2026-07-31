@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-train_grpo_poison_v7_e5.py
+train_grpo_poison_e5.py
 
-train_grpo_poison_v7.py(Contriever surrogate)와 동일한 GRPO+Kendall 학습 구조에서
+train_grpo_poison.py(Contriever surrogate)와 동일한 GRPO+Kendall 학습 구조에서
 r_retrieval(paper Eq.1)만 E5-base-v2 cosine similarity로 교체한 버전.
-r2~r5(Eq.2-5), 패널티(Eq.7), GRPO(Eq.8), Kendall rank loss(Eq.9-10)는 v7과 동일 —
-각 항의 paper-equation 대응은 train_grpo_poison_v7.py의 동일 함수 주석 참고.
+r2~r5(Eq.2-5), 패널티(Eq.7), GRPO(Eq.8), Kendall rank loss(Eq.9-10)는 베이스와 동일 —
+각 항의 paper-equation 대응은 train_grpo_poison.py의 동일 함수 주석 참고.
 
   - RETRIEVAL_MODEL : intfloat/e5-base-v2  (Contriever → E5)
   - r_retrieval(Eq.1) : cosine similarity (L2-normalized, "query:"/"passage:" prefix)
@@ -13,9 +13,9 @@ r2~r5(Eq.2-5), 패널티(Eq.7), GRPO(Eq.8), Kendall rank loss(Eq.9-10)는 v7과 
   - --skip_final_infer 플래그: 학습 후 500쿼리 inference 생략
 
 Usage:
-  CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_v7_e5.py \\
+  CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_e5.py \\
     --input          data/nq_train_validate/nq_500_pd_7b.csv \\
-    --output_dir     results/grpo_v7_e5_run1 \\
+    --output_dir     results/grpo_e5_run1 \\
     --generator_model Qwen/Qwen2.5-1.5B-Instruct \\
     --vicuna_model    lmsys/vicuna-7b-v1.3 \\
     --num_epochs 3 --group_size 8 --lora_r 16 --gpu_id 0
@@ -43,7 +43,7 @@ from sentence_transformers import SentenceTransformer
 # CONSTANTS / DEFAULTS
 # ─────────────────────────────────────────────────────────
 DEFAULT_INPUT     = "data/nq_500_pd_7b.csv"
-DEFAULT_OUTPUT    = "results/grpo_v7_e5_run1"
+DEFAULT_OUTPUT    = "results/grpo_e5_run1"
 GENERATOR_MODEL   = "Qwen/Qwen2.5-1.5B-Instruct"
 RETRIEVAL_MODEL   = "intfloat/e5-base-v2"
 E5_QUERY_PREFIX   = "query: "
@@ -208,7 +208,7 @@ class UncertaintyWeighter(nn.Module):
 
     NOTE (paper-vs-code): 논문 Eq.6은 R0(d)=Σr_k를 "weight-free"(가중치 없는 합)로
     정의하지만, 실제 학습 코드는 Kendall(2018) 스타일 학습되는 uncertainty weight로
-    5개 보상을 결합한다 (train_grpo_poison_v7.py와 동일한 구조/불일치, 그 파일 참고).
+    5개 보상을 결합한다 (train_grpo_poison.py와 동일한 구조/불일치, 그 파일 참고).
     """
     def __init__(self, n_tasks: int = 5):
         super().__init__()
@@ -236,7 +236,7 @@ class UncertaintyWeighter(nn.Module):
 def _get_e5_cos(doc: str, query: str) -> float:
     """E5-base-v2 cosine similarity with 'query:'/'passage:' prefix.
     Both embeddings L2-normalized → cosine = dot product.
-    Consistent with evaluation pipeline (main_dispo_ragdef_beir.py).
+    Consistent with evaluation pipeline (main_dipoison_ragdef_beir.py).
     """
     if not doc.strip():
         return 0.0
@@ -580,7 +580,7 @@ def train_position(
 
     최종 loss = l_grpo(Eq.8) + lam_k·l_kend(Eq.9-10) + uncert_loss
       → 논문 Eq.11에 uncert_loss(UncertaintyWeighter 정규화 항, 논문 수식에는 없음)가
-        추가된 형태 — train_grpo_poison_v7.py의 UncertaintyWeighter 주석 참고.
+        추가된 형태 — train_grpo_poison.py의 UncertaintyWeighter 주석 참고.
     """
     context_docs = [seed] + prev_docs
     prompt_text = format_prompt(tokenizer, query, target, seed, prev_docs)
@@ -847,21 +847,21 @@ def train(args) -> None:
         lr=args.lr, weight_decay=WEIGHT_DECAY,
     )
 
-    print(f"\n[config v7-E5] 생성기 (훈련)  : {args.generator_model}")
-    print(f"[config v7-E5] 검색기 (frozen) : {args.retrieval_model}  [E5-base-v2]")
-    print(f"[config v7-E5]   r_retrieval   : cosine similarity (prefix:'query:'/'passage:') → [(cos-{COS_FLOOR})/({COS_CEILING}-{COS_FLOOR})]")
-    print(f"[config v7] 분산측정(frozen): {args.defense_model}")
-    print(f"[config v7]   r_disp_embed  : 1 - MiniLM inter-cosine [Stage 2]")
-    print(f"[config v7]   r_tfidf_disp  : 1 - TF-IDF inter-sim [Stage 1]")
-    print(f"[config v7] 판단기 (frozen) : {args.vicuna_model}")
-    print(f"[config v7]   r_generation  : P(target|RAG_prompt) / r_ppl : Vicuna PPL")
-    print(f"[config v7] 패널티 방식     : additive (std 보존)")
-    print(f"[config v7]   target_miss   : -= {TARGET_MISSING_PENALTY_ADD}")
-    print(f"[config v7]   query_repeat  : += {QUERY_REPEAT_PENALTY} × (n-1)")
-    print(f"[config v7]   doc_collapse  : = {COLLAPSE_PENALTY} (replacement)")
-    print(f"[config v7] v7 수정사항:")
-    print(f"[config v7]   ADV_CLIP={ADV_CLIP}  LR={args.lr:.0e}  GRAD_CLIP={GRAD_CLIP}")
-    print(f"[config v7]   adv = clamp((r-mean)/std, -{ADV_CLIP}, {ADV_CLIP}) → overshooting 방지\n")
+    print(f"\n[config E5] 생성기 (훈련)  : {args.generator_model}")
+    print(f"[config E5] 검색기 (frozen) : {args.retrieval_model}  [E5-base-v2]")
+    print(f"[config E5]   r_retrieval   : cosine similarity (prefix:'query:'/'passage:') → [(cos-{COS_FLOOR})/({COS_CEILING}-{COS_FLOOR})]")
+    print(f"[config] 분산측정(frozen): {args.defense_model}")
+    print(f"[config]   r_disp_embed  : 1 - MiniLM inter-cosine [Stage 2]")
+    print(f"[config]   r_tfidf_disp  : 1 - TF-IDF inter-sim [Stage 1]")
+    print(f"[config] 판단기 (frozen) : {args.vicuna_model}")
+    print(f"[config]   r_generation  : P(target|RAG_prompt) / r_ppl : Vicuna PPL")
+    print(f"[config] 패널티 방식     : additive (std 보존)")
+    print(f"[config]   target_miss   : -= {TARGET_MISSING_PENALTY_ADD}")
+    print(f"[config]   query_repeat  : += {QUERY_REPEAT_PENALTY} × (n-1)")
+    print(f"[config]   doc_collapse  : = {COLLAPSE_PENALTY} (replacement)")
+    print(f"[config] E5 수정사항:")
+    print(f"[config]   ADV_CLIP={ADV_CLIP}  LR={args.lr:.0e}  GRAD_CLIP={GRAD_CLIP}")
+    print(f"[config]   adv = clamp((r-mean)/std, -{ADV_CLIP}, {ADV_CLIP}) → overshooting 방지\n")
 
     log_fh = open(log_path, "w")
     total_steps = args.num_epochs * len(df)
@@ -971,7 +971,7 @@ def train(args) -> None:
 # ARGUMENT PARSER
 # ─────────────────────────────────────────────────────────
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="GRPO poison doc training v7")
+    p = argparse.ArgumentParser(description="GRPO poison doc training")
     p.add_argument("--input",           default=DEFAULT_INPUT)
     p.add_argument("--output_dir",      default=DEFAULT_OUTPUT)
     p.add_argument("--generator_model", default=GENERATOR_MODEL)

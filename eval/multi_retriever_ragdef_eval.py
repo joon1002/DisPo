@@ -9,7 +9,7 @@ PRR / ND-ASR / RD-ASR 측정.
 - RAGDefender singlehop (AgglomerativeClustering + TF-IDF Stage1 + freq-score Stage2)
 
 Usage:
-  cd /path/to/DisPo
+  cd /path/to/DiPoison
   CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 /path/to/ragdef/.venv/bin/python \\
     eval/multi_retriever_ragdef_eval.py \\
     --dataset nq \\

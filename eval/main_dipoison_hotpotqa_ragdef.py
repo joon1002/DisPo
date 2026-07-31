@@ -1,18 +1,18 @@
 """
 [LEGACY] 쿼리당 소수 후보 문서끼리만 경쟁시키는 방식입니다.
-HotpotQA full-corpus 평가는 main_dispo_fullcorpus_ragdef.py --dataset hotpotqa 를 사용하세요.
+HotpotQA full-corpus 평가는 main_dipoison_fullcorpus_ragdef.py --dataset hotpotqa 를 사용하세요.
 
-main_dispo_hotpotqa_ragdef.py — HotpotQA BEIR corpus RAGDefender pipeline evaluation
+main_dipoison_hotpotqa_ragdef.py — HotpotQA BEIR corpus RAGDefender pipeline evaluation
 
-main_dispo_extraval_ragdef.py와 동일한 파이프라인.
+main_dipoison_extraval_ragdef.py와 동일한 파이프라인.
 차이점: BEIR HotpotQA corpus(/path/to/datasets/hotpotqa/) 사용.
   - corpus.jsonl: 5.2M Wikipedia passages
   - queries.jsonl: query text → BEIR _id 매핑
   - qrels (train+dev+test): query_id → relevant corpus_id
 
 Usage:
-  CUDA_VISIBLE_DEVICES=1 HF_HUB_DISABLE_XET=1 python eval/main_dispo_hotpotqa_ragdef.py \\
-    --docs_csv  results/grpo_v7_cont_n4_hotpotqa/pd_hotpotqa_val300_v7cont_n4.csv \\
+  CUDA_VISIBLE_DEVICES=1 HF_HUB_DISABLE_XET=1 python eval/main_dipoison_hotpotqa_ragdef.py \\
+    --docs_csv  results/grpo_cont_n4_hotpotqa/pd_hotpotqa_val300_cont_n4.csv \\
     --adv_per_query 4 --top_k 5 --gpu_id 0
 """
 

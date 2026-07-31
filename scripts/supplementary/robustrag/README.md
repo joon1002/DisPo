@@ -11,7 +11,7 @@ Fixed pipeline:
 Run:
 
 ```bash
-cd /path/to/DisPo
+cd /path/to/DiPoison
 scripts/supplementary/robustrag/run_robustrag_mistral7b.sh data/generated/your_attack.csv 0
 ```
 
