@@ -238,7 +238,7 @@ class UncertaintyWeighter(nn.Module):
 def _get_e5_cos(doc: str, query: str) -> float:
     """E5-base-v2 cosine similarity with 'query:'/'passage:' prefix.
     Both embeddings L2-normalized → cosine = dot product.
-    Consistent with evaluation pipeline (main_dipoison_ragdef_beir.py).
+    Consistent with evaluation pipeline (main_dipoison_fullcorpus_ragdef.py).
     """
     if not doc.strip():
         return 0.0

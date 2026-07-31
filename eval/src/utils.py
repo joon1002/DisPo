@@ -16,23 +16,16 @@ model_code_to_qmodel_name = {
     "contriever": "facebook/contriever",
     "contriever-msmarco": "facebook/contriever-msmarco",
     "ance": "sentence-transformers/msmarco-roberta-base-ance-firstp",
-    "dpr": "sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base"
 }
 
 model_code_to_cmodel_name = {
     "contriever": "facebook/contriever",
     "contriever-msmarco": "facebook/contriever-msmarco",
     "ance": "sentence-transformers/msmarco-roberta-base-ance-firstp",
-    "dpr": "sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base"
 }
 
 def contriever_get_emb(model, input):
     return model(**input)
-
-def dpr_get_emb(model, input):
-    #return model(**input).pooler_output
-    input.pop('token_type_ids', None)
-    return model(input)["sentence_embedding"]
 
 def ance_get_emb(model, input):
     input.pop('token_type_ids', None)
@@ -68,12 +61,6 @@ def load_models(model_code):
         c_model = model
         tokenizer = model.tokenizer
         get_emb = ance_get_emb
-    elif 'dpr' in model_code:
-        model = SentenceTransformer(model_code_to_qmodel_name[model_code], device='cuda')
-        assert model_code_to_cmodel_name[model_code] == model_code_to_qmodel_name[model_code]
-        c_model = model
-        tokenizer = model.tokenizer
-        get_emb = dpr_get_emb
     else:
         raise NotImplementedError
     
