@@ -10,7 +10,7 @@ Contriever 또는 E5를 화이트박스 검색기로 사용하여 Qwen2.5-1.5B �
 ### 1. 레포 클론
 
 ```bash
-git clone https://github.com/joon1002/DiPoison.git
+git clone <this-repository-url>
 cd DiPoison
 ```
 

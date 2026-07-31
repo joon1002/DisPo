@@ -198,6 +198,11 @@ CUDA_VISIBLE_DEVICES=0 python main_dipoison_ragdef_beir.py \
     --adv_per_query     4 --top_k 5 --run_label v7_cont_gen-llama3_8b --gpu_id 0
 ```
 
+> **GPT-4o-mini**: 유료 API 모델이라 전용 generator 코드를 별도로 넣어두지 않았습니다.
+> 위와 동일한 스크립트에서 `--model_config_path`만 GPT-4o-mini 설정으로 바꿔서 실행하면 됩니다
+> (`eval/model_configs/gpt4o_mini_config.example.json`을 복사해 `api_keys`에 본인 OpenAI API
+> 키를 채운 뒤 사용; `--model_name gpt` 등 provider는 config의 `model_info.provider`를 그대로 따릅니다).
+
 ---
 
 ## 주요 인자
