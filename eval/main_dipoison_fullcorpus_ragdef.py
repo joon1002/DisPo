@@ -107,6 +107,15 @@ _RETRIEVAL_ALIAS = {
 _DPR_QUESTION_ENCODER = "sentence-transformers/facebook-dpr-question_encoder-single-nq-base"
 _DPR_CONTEXT_ENCODER  = "sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base"
 
+# RAGDefender defense embedding space (Table 1 / Supp Table 5: matched=minilm, unseen=나머지)
+_DEFENSE_MODEL_ALIASES = {
+    "minilm": "paraphrase-MiniLM-L6-v2",
+    "mpnet":  "sentence-transformers/all-mpnet-base-v2",
+    "ance":   "sentence-transformers/msmarco-roberta-base-ance-firstp",
+    "bge":    "BAAI/bge-base-en-v1.5",
+    "gte":    "thenlper/gte-base",
+}
+
 # Contriever 계열: mean-pool + dot-product (비정규화)
 _CONTRIEVER_FAMILY = {"facebook/contriever", "facebook/contriever-msmarco"}
 
@@ -442,13 +451,15 @@ def main():
                    help="DPR query encoder: ctx=legacy context encoder, standard=question encoder")
     p.add_argument("--clean_topn_cache", type=str, default="",
                    help="미리 계산한 clean corpus top-N cache(.pt). 있으면 full corpus scoring 대신 cache+adv 재랭킹")
-    p.add_argument("--defense_model",   type=str, default="paraphrase-MiniLM-L6-v2",
-                   help="RAGDefender defense embedding model (SentenceTransformer ID)")
+    p.add_argument("--defense_model",   type=str, default="minilm",
+                   help="RAGDefender defense embedding model. Alias(minilm/mpnet/ance/bge/gte, "
+                        "Table 1·Supp Table 5의 matched/unseen 공간) 또는 임의의 SentenceTransformer ID.")
     p.add_argument("--skip_nd",         action="store_true",
                    help="ND(No-Defense) LLM 호출 생략 — RD-ASR만 측정할 때 속도 절반")
     p.add_argument("--embed_only",       action="store_true",
                    help="corpus 임베딩만 수행하고 eval 없이 종료")
     args = p.parse_args()
+    args.defense_model = _DEFENSE_MODEL_ALIASES.get(args.defense_model, args.defense_model)
 
     model_hf_name = _RETRIEVAL_ALIAS[args.retrieval_model]
     is_contriever_family = model_hf_name in _CONTRIEVER_FAMILY

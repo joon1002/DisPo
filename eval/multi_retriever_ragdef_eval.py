@@ -60,6 +60,15 @@ _DEFAULT_CACHE_DIRS = {
 _VICUNA_MODEL   = "lmsys/vicuna-7b-v1.3"
 _DEFENSE_MODEL  = "paraphrase-MiniLM-L6-v2"
 
+# RAGDefender defense embedding space (Supp Table 5: matched=minilm, unseen=나머지)
+_DEFENSE_MODEL_ALIASES = {
+    "minilm": "paraphrase-MiniLM-L6-v2",
+    "mpnet":  "sentence-transformers/all-mpnet-base-v2",
+    "ance":   "sentence-transformers/msmarco-roberta-base-ance-firstp",
+    "bge":    "BAAI/bge-base-en-v1.5",
+    "gte":    "thenlper/gte-base",
+}
+
 # ── 8가지 검색기 설정 ─────────────────────────────────────────────────────────
 _RETRIEVERS = [
     # (label,        cache_file,              retrieval_model_key,     hf_id,                        enc_type)
@@ -346,8 +355,11 @@ def main():
     p.add_argument("--adv_per_query", type=int, default=7)
     p.add_argument("--gpu_id",     type=int, default=0)
     p.add_argument("--vicuna_model", type=str, default=_VICUNA_MODEL)
-    p.add_argument("--defense_model", type=str, default=_DEFENSE_MODEL)
+    p.add_argument("--defense_model", type=str, default="minilm",
+                   help="Alias(minilm/mpnet/ance/bge/gte, Supp Table 5의 matched/unseen 공간) "
+                        "또는 임의의 SentenceTransformer ID.")
     args = p.parse_args()
+    args.defense_model = _DEFENSE_MODEL_ALIASES.get(args.defense_model, args.defense_model)
 
     top_ks = [int(k) for k in args.top_ks.split(",")]
     if torch.cuda.is_available():

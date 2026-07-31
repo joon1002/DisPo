@@ -2,6 +2,12 @@
 
 No-Defense / RAGDefender 방어 하에서 DiPoison 악성 문서의 공격 성공률(ASR)과 검색 지표(Precision/Recall/F1)를 측정합니다.
 
+> **주의**: 이 문서와 `main_dipoison_ragdef_beir.py`/`main_dipoison_extraval_ragdef.py`는 쿼리당 소수 후보
+> 문서만 경쟁시키는 legacy(BEIR 소규모 pool) 파이프라인을 설명합니다. 논문에 보고된 결과는 전부
+> full-corpus 방식(`main_dipoison_fullcorpus_ragdef.py` 등, 최상위 [README.md](../README.md) 참고)으로
+> 재현하며, 8개 검색기 비교(Table 3, Supp Table 10/11)도 legacy 스크립트가 아니라
+> `multi_retriever_ragdef_eval.py`/`hotpotqa_merged_multihop_8ret_eval.py`를 사용합니다.
+
 ---
 
 ## 평가 구조
@@ -50,16 +56,21 @@ Candidate pool = poison_docs(N개) + BEIR NQ 정상 문서(4~124개)
 
 지정한 검색기로 Candidate pool에서 top-k 문서를 선택합니다.
 
+**논문에서 실제로 비교하는 8개 검색기(Table 3, Supp Table 10/11)는 아래와 같습니다** —
+surrogate 2개(contriever, e5) + unseen 6개(ance, bge-base, mpnet, bm25, nomic-v1.5, contriever-msmarco):
+
 | 검색기 | 모델 | 유사도 |
 |--------|------|--------|
 | contriever | `facebook/contriever` | dot product |
-| contriever-msmarco | `facebook/contriever-msmarco` | dot product |
-| ance | `sentence-transformers/msmarco-roberta-base-ance-firstp` | cosine |
-| dpr | `sentence-transformers/facebook-dpr-ctx_encoder-single-nq-base` | cosine |
-| bge-base | `BAAI/bge-base-en-v1.5` | cosine |
 | e5-base | `intfloat/e5-base-v2` | cosine |
-| gte-base | `thenlper/gte-base` | cosine |
+| ance | `sentence-transformers/msmarco-roberta-base-ance-firstp` | cosine |
+| bge-base | `BAAI/bge-base-en-v1.5` | cosine |
 | mpnet | `sentence-transformers/all-mpnet-base-v2` | cosine |
+| bm25 | lexical (BM25) | BM25 score |
+| nomic-v1.5 | `nomic-ai/nomic-embed-text-v1.5` | cosine |
+| contriever-msmarco | `facebook/contriever-msmarco` | dot product |
+
+이 8개 비교는 `multi_retriever_ragdef_eval.py`(NQ/MS MARCO)와 `hotpotqa_merged_multihop_8ret_eval.py`(HotpotQA)로 재현합니다 — 아래 §"8개 검색기 순차 실행" 참고. `main_dipoison_ragdef_beir.py`/`main_dipoison_extraval_ragdef.py`(이 문서의 "기본 실행" 예시, dpr/gte-base 포함)는 쿼리당 소수 후보 문서만 경쟁시키는 legacy 파이프라인으로, 논문에 보고된 8-검색기 실험과는 다른 retriever 조합을 쓰는 별개 코드입니다 — Table 3/10/11 재현에는 사용하지 마세요.
 
 ### 3. No-Defense (ND) 평가
 
@@ -87,6 +98,19 @@ RAGDefender (Xue et al., 2024) 2단계 방어를 적용한 후 LLM 평가. **NQ/
 - 스크립트: `hotpotqa_multihop_ragdef_v2_eval.py`
 - Stage 1 — 클러스터링 대신, top-k 문서 간 pairwise 코사인 유사도의 평균/중앙값이 비정상적으로 높은 문서를 악성으로 추정해 `n_adv`를 결정 (`find_num_adv_multihop()`)
 - Stage 2 — 이후 절차는 싱글홉과 동일한 pairwise frequency-score filter (`ragdefender_multihop()`)
+
+**Unseen defense space (Table 1, Supp Table 5)** — `--defense_model`의 기본값은 매칭 세팅(`minilm`,
+paraphrase-MiniLM-L6-v2)이고, `mpnet`/`ance`/`bge`/`gte` 별칭으로 unseen 임베딩 공간을 지정합니다
+(`main_dipoison_fullcorpus_ragdef.py`, `multi_retriever_ragdef_eval.py`, `hotpotqa_multihop_ragdef_v2_eval.py`
+전부 동일한 별칭 지원; 임의의 SentenceTransformer ID도 그대로 사용 가능):
+
+```bash
+# NQ, unseen defense space = MPNet
+CUDA_VISIBLE_DEVICES=0 python main_dipoison_fullcorpus_ragdef.py \
+    --dataset nq --retrieval_model contriever \
+    --docs_csv data/generated/pd_eval100_cont_n4g8.csv \
+    --defense_model mpnet --adv_per_query 4 --top_k 5 --gpu_id 0
+```
 
 ### 5. 지표 계산
 
@@ -117,22 +141,35 @@ CUDA_VISIBLE_DEVICES=0 python main_dipoison_ragdef_beir.py \
     --gpu_id            0
 ```
 
-### 8개 검색기 순차 실행
+### 8개 검색기 비교 (Table 3, Supp Table 10/11 — top-5/top-10 동시 재현)
+
+이 실험은 legacy 스크립트가 아니라 `multi_retriever_ragdef_eval.py`(NQ/MS MARCO) /
+`hotpotqa_merged_multihop_8ret_eval.py`(HotpotQA)로 재현합니다. 한 번 실행하면 8개
+검색기 × top-{5,10}을 전부 순회하며, 논문에 보고된 조합(contriever, e5, ance, bge-base,
+mpnet, bm25, nomic-v1.5, contriever-msmarco)만 사용합니다 — dpr/gte-base는 여기 없습니다.
 
 ```bash
-cd eval/
+cd /path/to/DiPoison
 
-for RETRIEVER in contriever contriever-msmarco ance dpr bge-base e5-base gte-base mpnet; do
-    CUDA_VISIBLE_DEVICES=0 python main_dipoison_ragdef_beir.py \
-        --retrieval_model   $RETRIEVER \
-        --model_config_path model_configs/vicuna7b_config.json \
-        --model_name        vicuna \
-        --docs_csv          ../data/generated/pd_eval100_cont_n4g8.csv \
-        --adv_per_query     4 \
-        --top_k             5 \
-        --run_label         v7_cont \
-        --gpu_id            0
-done
+# NQ (merged N=7 poison set 기준)
+CUDA_VISIBLE_DEVICES=0 python eval/multi_retriever_ragdef_eval.py \
+    --dataset   nq \
+    --docs_csv  data/generated/pd_eval100_merged_n7.csv \
+    --out_json  eval/results/multi_retriever_ragdef/pd_eval100_merged_n7_summary.json
+    # --top_ks 기본값 "5,10" (top-5/top-10 동시 실행)
+
+# MS MARCO (corpus는 다른 서버에 있을 수 있으므로 --corpus_path로 직접 지정)
+CUDA_VISIBLE_DEVICES=0 python eval/multi_retriever_ragdef_eval.py \
+    --dataset     msmarco \
+    --corpus_path /path/to/msmarco/corpus.jsonl \
+    --cache_dir   eval/clean_topn_cache/msmarco_merged_val100_top50 \
+    --docs_csv    data/attackbaselines_pd/DiPoison/merged/msmarco_merged_dipoison.csv \
+    --out_json    eval/results/msmarco_merged_8ret_fullcorpus/msmarco_merged_dipoison_summary.json
+
+# HotpotQA
+CUDA_VISIBLE_DEVICES=0 python eval/hotpotqa_merged_multihop_8ret_eval.py \
+    --docs_csv data/attackbaselines_pd/DiPoison/merged/hotpotqa_merged_dipoison.csv
+    # --top_ks 기본값 "5,10"
 ```
 
 ### E5 악성문서 평가
