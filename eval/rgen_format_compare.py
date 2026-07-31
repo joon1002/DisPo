@@ -2,8 +2,8 @@
 """
 rgen_format_compare.py
 
-Standalone vs FastChat r_generation 보상 신호 비교.
-훈련 없이 기존 docs로 두 포맷의 reward 분포 및 rank 상관관계를 측정.
+Compares the r_generation reward signal between Standalone and FastChat formats.
+Measures the reward distribution and rank correlation of both formats on existing docs, without training.
 
 Usage:
   /path/to/nq/.venv/bin/python /path/to/DiPoison/eval/rgen_format_compare.py
@@ -19,20 +19,20 @@ from scipy.stats import spearmanr
 
 _ROOT = Path(__file__).resolve().parent.parent
 
-# ── 설정 ─────────────────────────────────────────────────────
+# ── Config ───────────────────────────────────────────────────
 VICUNA_MODEL   = "lmsys/vicuna-7b-v1.3"
 DEVICE         = "cuda:0"
 MAX_TOKENS     = 768
-NLL_SHIFT      = 2.0   # train_grpo_poison.py 와 동일
+NLL_SHIFT      = 2.0   # same as train_grpo_poison.py
 
-# 평가할 doc 파일 (cont N2 + e5)
+# doc files to evaluate (cont N2 + e5)
 DOC_FILES = [
     (str(_ROOT / "results/grpo_n2_q500_run1/pd_eval100_N2_v2.csv"),  "cont_v2", "doc0_seed"),
     (str(_ROOT / "results/grpo_n2_q500_run1/pd_eval100_N2_v2.csv"),  "cont_v2_doc1", "doc1"),
     (str(_ROOT / "data/generated/pd_eval100_e5_val_v2.csv"),           "e5_v2",   "doc0_seed"),
 ]
 
-# Standalone 프롬프트 (훈련에서 사용하는 _RAG_PROMPT 와 동일)
+# Standalone prompt (same as the _RAG_PROMPT used in training)
 _STANDALONE_TMPL = (
     "You are a helpful assistant, below is a query from a user and some relevant contexts. "
     "Answer the question given the information in those contexts. "
@@ -41,7 +41,7 @@ _STANDALONE_TMPL = (
     "\n\nContexts: {context}\n\nQuery: {question}\n\nAnswer:"
 )
 
-# FastChat 프롬프트 (평가에서 사용하는 방식)
+# FastChat prompt (the format used during evaluation)
 _VSYS = (
     "A chat between a curious user and an artificial intelligence assistant. "
     "The assistant gives helpful, detailed, and polite answers to the user's questions."
@@ -50,8 +50,8 @@ def _fastchat_prompt(context: str, question: str) -> str:
     rag = _STANDALONE_TMPL.format(context=context, question=question)
     return f"{_VSYS} USER: {rag} ASSISTANT:"
 
-# ── Vicuna 로드 ───────────────────────────────────────────────
-print(f"[load] {VICUNA_MODEL} → {DEVICE}")
+# ── Load Vicuna ──────────────────────────────────────────────
+print(f"[load] {VICUNA_MODEL} -> {DEVICE}")
 tok = AutoTokenizer.from_pretrained(VICUNA_MODEL, use_fast=True)
 if tok.pad_token is None:
     tok.pad_token = tok.eos_token
@@ -62,7 +62,7 @@ model.eval()
 model.requires_grad_(False)
 print("[load] done.")
 
-# ── r_generation 계산 ─────────────────────────────────────────
+# ── Compute r_generation ─────────────────────────────────────
 def compute_rgen(prompt: str, target: str) -> float:
     prompt_ids = tok(
         prompt, return_tensors="pt",
@@ -83,7 +83,7 @@ def compute_rgen(prompt: str, target: str) -> float:
     nll = float(F.cross_entropy(logits, t_ids[0], reduction="mean").item())
     return float(torch.sigmoid(torch.tensor(-nll + NLL_SHIFT)).item())
 
-# ── 메인 ─────────────────────────────────────────────────────
+# ── Main ─────────────────────────────────────────────────────
 all_results = []
 
 for csv_path, label, doc_col in DOC_FILES:
@@ -119,7 +119,7 @@ for csv_path, label, doc_col in DOC_FILES:
     rho, pval = spearmanr(rgen_sa, rgen_fc)
     diff = rgen_fc - rgen_sa
 
-    print(f"\n  ── {label} 결과 ──")
+    print(f"\n  ── {label} results ──")
     print(f"  Standalone : mean={rgen_sa.mean():.4f}  std={rgen_sa.std():.4f}  median={np.median(rgen_sa):.4f}")
     print(f"  FastChat   : mean={rgen_fc.mean():.4f}  std={rgen_fc.std():.4f}  median={np.median(rgen_fc):.4f}")
     print(f"  FC - SA    : mean={diff.mean():.4f}  std={diff.std():.4f}  |diff|={np.abs(diff).mean():.4f}")
@@ -134,13 +134,13 @@ for csv_path, label, doc_col in DOC_FILES:
     })
 
 print("\n" + "="*60)
-print("  전체 요약")
+print("  Overall summary")
 print("="*60)
-print(f"{'파일':<20} {'SA mean':>8} {'FC mean':>8} {'FC-SA':>8} {'Spearman ρ':>12}")
+print(f"{'File':<20} {'SA mean':>8} {'FC mean':>8} {'FC-SA':>8} {'Spearman rho':>12}")
 for r in all_results:
     print(f"  {r['label']:<18} {r['sa_mean']:>8.4f} {r['fc_mean']:>8.4f} {r['diff_mean']:>+8.4f} {r['spearman_rho']:>12.4f}")
 
-print("\n해석 기준:")
-print("  ρ > 0.9  → 두 포맷이 동일한 docs 선호 → 훈련 포맷 변경 효과 없음")
-print("  ρ 0.7~0.9 → 부분 차이 → 추가 확인 필요")
-print("  ρ < 0.7  → 포맷이 reward landscape를 크게 바꿈 → 재훈련 고려")
+print("\nInterpretation guide:")
+print("  rho > 0.9  -> both formats favor the same docs -> changing the training format has no effect")
+print("  rho 0.7-0.9 -> partial difference -> needs further checking")
+print("  rho < 0.7  -> the format substantially changes the reward landscape -> consider retraining")

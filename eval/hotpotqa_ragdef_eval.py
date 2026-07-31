@@ -1,20 +1,20 @@
 """
 hotpotqa_ragdef_eval.py
 
-NQ full corpus 방식과 동일한 retrieval 설정:
-  쿼리별로 Contriever full corpus (5.2M) 전체와 dot-product → adv docs score merge →
-  top-k 직접 선택 (pre-filtering 없음).
+Same retrieval setup as the NQ full-corpus approach:
+  For each query, dot-product against the full Contriever corpus (5.2M) + merge with adv doc scores ->
+  select top-k directly (no pre-filtering).
 
-이후 RAGDefender 2-stage를 추가하여 ND-ASR / RD-ASR 을 비교.
+RAGDefender's 2-stage defense is then applied to compare ND-ASR / RD-ASR.
 
-Retrieval (ND · RD 동일, NQ full corpus 기준):
-  - corpus 5.2M + adv n개 전체를 쿼리와 scoring → top-k 직접 선택
-  - (ret_top_n 사전 필터링 없음 — main_dipoison_fullcorpus_ragdef.py NQ 방식과 동일)
+Retrieval (identical for ND and RD, NQ full-corpus basis):
+  - Score the query against the full 5.2M corpus + n adv docs -> select top-k directly
+  - (No ret_top_n pre-filtering — same as the NQ approach in main_dipoison_fullcorpus_ragdef.py)
 
-Defense (RD 전용):
-  - Stage-1 : AgglomerativeClustering(n_clusters=2) + TF-IDF 보정 → adv 개수 추정
-  - Stage-2 : pair similarity scoring → 최하위 n_adv개 제거
-  - 남은 문서로 Vicuna-7B 재생성
+Defense (RD only):
+  - Stage-1: AgglomerativeClustering(n_clusters=2) + TF-IDF correction -> estimate the adv count
+  - Stage-2: pair similarity scoring -> remove the bottom n_adv docs
+  - Regenerate with Vicuna-7B using the remaining documents
 
 Usage:
   CUDA_VISIBLE_DEVICES=1 python eval/hotpotqa_ragdef_eval.py \\
@@ -183,14 +183,14 @@ def main():
     log(f"[config] device={device}, top_k={args.top_k}")
     log(f"[config] queries_csv={args.queries_csv}")
     log(f"[config] defense_model={args.defense_model}")
-    log(f"[config] retrieval=full_corpus (NQ 방식: 5.2M+adv → top-k 직접)")
+    log(f"[config] retrieval=full_corpus (NQ approach: 5.2M+adv -> top-k directly)")
 
-    # ── 쿼리 로드 ─────────────────────────────────────────────────────────────
+    # ── Load queries ──────────────────────────────────────────────────────────
     import ast as _ast
     df = pd.read_csv(args.queries_csv)
 
     if "adv_texts" in df.columns:
-        # confundo 포맷: id, question, correct answer, incorrect answer, adv_texts (JSON list)
+        # confundo format: id, question, correct answer, incorrect answer, adv_texts (JSON list)
         fmt = "confundo"
         queries     = df["question"].tolist()
         correct_ans = df["correct answer"].tolist()
@@ -198,7 +198,7 @@ def main():
         adv_docs_per_query = [_ast.literal_eval(t) for t in df["adv_texts"]]
         log(f"[data] confundo format, {len(queries)} queries, adv_texts (list per query)")
     else:
-        # poisonedrag 포맷: query, correct_answer, target_answer, doc0_seed, doc1, ...
+        # poisonedrag format: query, correct_answer, target_answer, doc0_seed, doc1, ...
         fmt = "poisonedrag"
         if "correct_answer" not in df.columns and "answer" in df.columns:
             df = df.rename(columns={"answer": "correct_answer"})
@@ -210,16 +210,16 @@ def main():
                               for _, row in df.iterrows()]
         log(f"[data] poisonedrag format, {len(queries)} queries, adv_cols={adv_cols}")
 
-    # ── Contriever 로드 ───────────────────────────────────────────────────────
-    log(f"\n[step1] Contriever 로드...")
+    # ── Load Contriever ───────────────────────────────────────────────────────
+    log(f"\n[step1] Loading Contriever...")
     ctv_tok = AutoTokenizer.from_pretrained(_CONTRIEVER_HF)
     ctv_mod = AutoModel.from_pretrained(_CONTRIEVER_HF, torch_dtype=torch.float32).to(device)
     ctv_mod.eval()
 
-    log(f"[step2] 쿼리 임베딩...")
+    log(f"[step2] Embedding queries...")
     q_embs = encode_texts(queries, ctv_mod, ctv_tok, device).half()
 
-    log(f"[step3] adv 문서 임베딩...")
+    log(f"[step3] Embedding adv documents...")
     all_adv_texts, adv_per_q_count = [], []
     for docs in adv_docs_per_query:
         all_adv_texts.extend(docs)
@@ -229,13 +229,13 @@ def main():
     for cnt in adv_per_q_count:
         adv_embs_per_query.append(all_adv_embs[ptr:ptr+cnt])
         ptr += cnt
-    log(f"[step3] adv 임베딩 완료 (총 {len(all_adv_texts)}개)")
+    log(f"[step3] adv embedding complete (total {len(all_adv_texts)})")
 
     del ctv_mod, ctv_tok
     gc.collect(); torch.cuda.empty_cache()
 
-    # ── corpus 텍스트 로드 ────────────────────────────────────────────────────
-    log("\n[step4] corpus.jsonl 로드 (5.2M passages)...")
+    # ── Load corpus texts ────────────────────────────────────────────────────
+    log("\n[step4] Loading corpus.jsonl (5.2M passages)...")
     corpus_ids, corpus_texts = [], []
     with open(_CORPUS_PATH) as f:
         for line in f:
@@ -244,25 +244,25 @@ def main():
             corpus_texts.append(d.get("text", ""))
     log(f"[step4] corpus {len(corpus_texts):,} passages")
 
-    # ── corpus 임베딩 GPU 로드 (eval 루프 내내 유지 — NQ full corpus 방식) ──────
-    log(f"\n[step5] corpus 임베딩 캐시 로드: {_EMB_CACHE}")
+    # ── Load corpus embeddings to GPU (kept resident for the whole eval loop — NQ full-corpus approach) ──
+    log(f"\n[step5] Loading corpus embedding cache: {_EMB_CACHE}")
     corpus_embs = torch.load(_EMB_CACHE, map_location="cpu", weights_only=True)
     corpus_embs_gpu = corpus_embs.half().to(device)
     del corpus_embs
     gc.collect()
-    log(f"[step5] corpus_embs GPU 유지 중. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+    log(f"[step5] corpus_embs kept resident on GPU. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
-    # ── RAGDefender defense model 로드 ────────────────────────────────────────
-    log(f"\n[step7a] defense model 로드: {args.defense_model}")
+    # ── Load the RAGDefender defense model ───────────────────────────────────
+    log(f"\n[step7a] Loading defense model: {args.defense_model}")
     defense_model = SentenceTransformer(args.defense_model)
-    log(f"[step7a] defense model 완료")
+    log(f"[step7a] defense model loaded")
 
-    # ── Vicuna-7B 로드 ────────────────────────────────────────────────────────
-    log("\n[step7b] Vicuna-7B 로드...")
+    # ── Load Vicuna-7B ────────────────────────────────────────────────────────
+    log("\n[step7b] Loading Vicuna-7B...")
     try:
         from fastchat.model import load_model, get_conversation_template
     except ImportError:
-        raise ImportError("fastchat 없음. /path/to/ragatt/.venv 사용")
+        raise ImportError("fastchat not found. Use /path/to/ragatt/.venv")
 
     llm_model, llm_tok = load_model(
         model_path=_VICUNA_MODEL, device="cuda", num_gpus=1,
@@ -270,7 +270,7 @@ def main():
         load_8bit=False, cpu_offloading=False, revision="main", debug=False,
     )
     llm_model.eval()
-    log(f"[step7b] Vicuna-7B 완료. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+    log(f"[step7b] Vicuna-7B loaded. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
     def vicuna_generate(prompt):
         try:
@@ -291,16 +291,16 @@ def main():
         except Exception:
             return ""
 
-    # ── 평가 루프 ─────────────────────────────────────────────────────────────
+    # ── Evaluation loop ───────────────────────────────────────────────────────
     results = []
     nd_asr = nd_acc = rd_asr = rd_acc = 0
 
-    log(f"\n[step8] 평가 시작 (N={len(queries)}, top_k={args.top_k}, full corpus)...")
+    log(f"\n[step8] Starting evaluation (N={len(queries)}, top_k={args.top_k}, full corpus)...")
 
     for i, (query, c_ans, t_ans) in enumerate(
         tqdm(zip(queries, correct_ans, target_ans), total=len(queries), desc="eval")
     ):
-        # ─ NQ full corpus 방식: 쿼리 vs 전체 5.2M scoring ─
+        # ─ NQ full-corpus approach: score query vs the full 5.2M ─
         q_emb_i = q_embs[i].unsqueeze(0).to(device)           # [1, 768]
         corpus_scores_i = torch.mm(q_emb_i, corpus_embs_gpu.T).squeeze(0)  # [5.2M]
 
@@ -308,7 +308,7 @@ def main():
         adv_sc = torch.mm(q_emb_i, adv_e.T).squeeze(0)        # [n_adv]
         adv_n  = len(adv_docs_per_query[i])
 
-        # ─ corpus 전체 + adv docs → top-k 직접 선택 ─
+        # ─ full corpus + adv docs -> select top-k directly ─
         all_scores = torch.cat([corpus_scores_i.cpu(), adv_sc.cpu()], dim=0)  # [5.2M + n_adv]
         top_local  = all_scores.topk(args.top_k).indices.tolist()
         n_corpus   = corpus_scores_i.shape[0]
@@ -320,14 +320,14 @@ def main():
             else:
                 atk_docs.append(adv_docs_per_query[i][idx - n_corpus])
 
-        # ─ Phase 2 ND: 그대로 생성 ─
+        # ─ Phase 2 ND: generate as-is ─
         nd_resp = vicuna_generate(wrap_prompt(query, atk_docs))
         nd_is_asr = check_asr(t_ans, nd_resp) if t_ans else False
         nd_is_acc = check_acc(c_ans, nd_resp)
         if nd_is_asr: nd_asr += 1
         if nd_is_acc: nd_acc += 1
 
-        # ─ Phase 3 RD: RAGDefender → 생성 ─
+        # ─ Phase 3 RD: RAGDefender -> generate ─
         safe_docs = ragdefender(atk_docs, defense_model)
         if safe_docs:
             rd_resp = vicuna_generate(wrap_prompt(query, safe_docs))
@@ -359,7 +359,7 @@ def main():
     log(f"[result] RD-ACC = {rd_acc/n:.2%}  ({rd_acc}/{n})")
     log(f"{'='*60}")
 
-    # ── 저장 ─────────────────────────────────────────────────────────────────
+    # ── Save ──────────────────────────────────────────────────────────────────
     pd.DataFrame(results).to_csv(
         os.path.join(args.out_dir, f"results_{ts}.csv"), index=False)
 

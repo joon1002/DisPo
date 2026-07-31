@@ -1,11 +1,12 @@
 """
 hotpotqa_collateral_acc_eval.py
 
-실험 목적: clean100 쿼리(ACC=100%)에 대해, 전혀 무관한 쿼리용 악성문서(e.g. poisonedRAG 400개)를
-          full corpus에 글로벌로 주입했을 때 ACC가 얼마나 하락하는지 (Collateral Damage) 측정.
+Purpose: For clean100 queries (ACC=100%), measure how much ACC drops (Collateral Damage)
+          when malicious documents built for entirely unrelated queries (e.g. 400 poisonedRAG docs)
+          are globally injected into the full corpus.
 
-Phase 1 (Clean):  clean100 쿼리 → corpus top-k 검색 → Vicuna-7B → ACC
-Phase 2 (Attack): clean100 쿼리 → corpus top-n + adv_all (400개) 전체 score merge → top-k → ACC
+Phase 1 (Clean):  clean100 queries -> corpus top-k retrieval -> Vicuna-7B -> ACC
+Phase 2 (Attack): clean100 queries -> merge scores across corpus top-n + all 400 adv_all docs -> top-k -> ACC
 
 Usage:
   CUDA_VISIBLE_DEVICES=1 python eval/hotpotqa_collateral_acc_eval.py \
@@ -82,17 +83,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--clean_csv", type=str,
                         default=str(_ROOT / "data/generated/hotpotqa/hotpotqa_clean100_seed42.csv"),
-                        help="평가 쿼리 CSV (columns: query, answer)")
+                        help="Evaluation query CSV (columns: query, answer)")
     parser.add_argument("--adv_csv", type=str,
                         default=str(_ROOT / "data/generated/hotpotqa/poisonedrag4_hotpot100.csv"),
-                        help="악성문서 CSV (다른 쿼리용, 글로벌 주입)")
+                        help="Malicious document CSV (for other queries, injected globally)")
     parser.add_argument("--adv_cols", nargs="+",
                         default=["doc0_seed", "doc1", "doc2", "doc3"],
-                        help="악성문서 컬럼명")
+                        help="Malicious document column names")
     parser.add_argument("--gpu_id",    type=int, default=1)
     parser.add_argument("--top_k",     type=int, default=5)
     parser.add_argument("--ret_top_n", type=int, default=50,
-                        help="corpus에서 먼저 뽑을 후보 수")
+                        help="Number of candidates to retrieve from the corpus first")
     parser.add_argument("--out_dir",   type=str,
                         default=str(_ROOT / "eval/results/hotpotqa_collateral_poisonedrag"))
     args = parser.parse_args()
@@ -113,7 +114,7 @@ def main():
     log(f"[config] adv_csv={args.adv_csv}")
     log(f"[config] adv_cols={args.adv_cols}")
 
-    # ── clean 쿼리 로드 ───────────────────────────────────────────────────────────
+    # ── Load clean queries ───────────────────────────────────────────────────────
     df_clean = pd.read_csv(args.clean_csv)
     if "correct_answer" not in df_clean.columns and "answer" in df_clean.columns:
         df_clean = df_clean.rename(columns={"answer": "correct_answer"})
@@ -121,7 +122,7 @@ def main():
     correct_ans = df_clean["correct_answer"].tolist()
     log(f"[data] clean queries: {len(queries)}")
 
-    # ── adv 문서 로드 (글로벌, 모든 쿼리 공용) ───────────────────────────────────
+    # ── Load adv documents (global, shared across all queries) ──────────────────
     df_adv = pd.read_csv(args.adv_csv)
     adv_cols = [c for c in args.adv_cols if c in df_adv.columns]
     adv_texts_all = []
@@ -129,21 +130,21 @@ def main():
         for c in adv_cols:
             if pd.notna(row[c]):
                 adv_texts_all.append(str(row[c]))
-    log(f"[data] adv docs (global): {len(adv_texts_all)} (from {len(df_adv)} rows × {len(adv_cols)} cols)")
+    log(f"[data] adv docs (global): {len(adv_texts_all)} (from {len(df_adv)} rows x {len(adv_cols)} cols)")
 
-    # ── Contriever 로드 ───────────────────────────────────────────────────────────
-    log(f"\n[step1] Contriever 로드: {_CONTRIEVER_HF}")
+    # ── Load Contriever ──────────────────────────────────────────────────────────
+    log(f"\n[step1] Loading Contriever: {_CONTRIEVER_HF}")
     ctv_tok = AutoTokenizer.from_pretrained(_CONTRIEVER_HF)
     ctv_mod = AutoModel.from_pretrained(_CONTRIEVER_HF, torch_dtype=torch.float32).to(device)
     ctv_mod.eval()
 
-    # ── 쿼리 임베딩 ──────────────────────────────────────────────────────────────
-    log(f"[step2] {len(queries)}개 clean 쿼리 임베딩...")
+    # ── Embed queries ────────────────────────────────────────────────────────────
+    log(f"[step2] Embedding {len(queries)} clean queries...")
     q_embs = encode_texts(queries, ctv_mod, ctv_tok, device).half()  # [100, 768]
     log(f"[step2] q_embs shape={q_embs.shape}")
 
-    # ── adv 문서 임베딩 (전체 400개) ─────────────────────────────────────────────
-    log(f"[step3] {len(adv_texts_all)}개 adv 문서 임베딩...")
+    # ── Embed adv documents (all 400) ────────────────────────────────────────────
+    log(f"[step3] Embedding {len(adv_texts_all)} adv documents...")
     adv_embs = encode_texts(adv_texts_all, ctv_mod, ctv_tok, device).half()  # [400, 768]
     log(f"[step3] adv_embs shape={adv_embs.shape}")
 
@@ -151,8 +152,8 @@ def main():
     gc.collect()
     torch.cuda.empty_cache()
 
-    # ── corpus 텍스트 로드 ────────────────────────────────────────────────────────
-    log("\n[step4] corpus.jsonl 로드 (5.2M passages)...")
+    # ── Load corpus texts ────────────────────────────────────────────────────────
+    log("\n[step4] Loading corpus.jsonl (5.2M passages)...")
     corpus_ids   = []
     corpus_texts = []
     with open(_CORPUS_PATH) as f:
@@ -162,16 +163,16 @@ def main():
             corpus_texts.append(d.get("text", ""))
     log(f"[step4] corpus {len(corpus_texts):,} passages")
 
-    # ── corpus 임베딩 GPU 로드 ────────────────────────────────────────────────────
-    log(f"\n[step5] corpus 임베딩 로드: {_EMB_CACHE}")
+    # ── Load corpus embeddings to GPU ────────────────────────────────────────────
+    log(f"\n[step5] Loading corpus embeddings: {_EMB_CACHE}")
     corpus_embs = torch.load(_EMB_CACHE, map_location="cpu", weights_only=True)
     corpus_embs_gpu = corpus_embs.half().to(device)
     del corpus_embs
     gc.collect()
-    log(f"[step5] corpus_embs GPU 완료. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+    log(f"[step5] corpus_embs moved to GPU. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
-    # ── corpus top-N 검색 ─────────────────────────────────────────────────────────
-    log(f"\n[step6] corpus top-{args.ret_top_n} 검색 (clean 쿼리 {len(queries)}개)...")
+    # ── corpus top-N retrieval ───────────────────────────────────────────────────
+    log(f"\n[step6] corpus top-{args.ret_top_n} retrieval ({len(queries)} clean queries)...")
     topn_indices = []
     topn_scores  = []
     chunk = 50
@@ -183,29 +184,29 @@ def main():
         topn_scores.append(topn.values.cpu())
     topn_indices = torch.cat(topn_indices, dim=0)  # [N, ret_top_n]
     topn_scores  = torch.cat(topn_scores,  dim=0)  # [N, ret_top_n]
-    log(f"[step6] corpus 검색 완료")
+    log(f"[step6] corpus retrieval complete")
 
     del corpus_embs_gpu
     gc.collect()
     torch.cuda.empty_cache()
-    log(f"[step6] corpus 임베딩 해제. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+    log(f"[step6] corpus embeddings freed. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
-    # ── adv score 계산 (clean 쿼리 × 400 adv docs) ───────────────────────────────
-    log(f"\n[step6b] clean 쿼리 vs adv 400개 score 계산...")
+    # ── Compute adv scores (clean queries x 400 adv docs) ───────────────────────
+    log(f"\n[step6b] Computing scores: clean queries vs 400 adv docs...")
     adv_embs_gpu = adv_embs.to(device)
     adv_scores = torch.mm(q_embs.to(device), adv_embs_gpu.T)  # [100, 400]
     adv_scores = adv_scores.cpu()
     del adv_embs_gpu
     gc.collect()
     torch.cuda.empty_cache()
-    log(f"[step6b] adv score 계산 완료. shape={adv_scores.shape}")
+    log(f"[step6b] adv score computation complete. shape={adv_scores.shape}")
 
-    # ── Vicuna-7B 로드 ────────────────────────────────────────────────────────────
-    log("\n[step7] Vicuna-7B 로드...")
+    # ── Load Vicuna-7B ────────────────────────────────────────────────────────────
+    log("\n[step7] Loading Vicuna-7B...")
     try:
         from fastchat.model import load_model, get_conversation_template
     except ImportError:
-        raise ImportError("fastchat 없음. /path/to/ragatt/.venv 사용")
+        raise ImportError("fastchat not found. Use /path/to/ragatt/.venv")
 
     llm_model, llm_tok = load_model(
         model_path=_VICUNA_MODEL, device="cuda", num_gpus=1,
@@ -213,7 +214,7 @@ def main():
         load_8bit=False, cpu_offloading=False, revision="main", debug=False,
     )
     llm_model.eval()
-    log(f"[step7] Vicuna-7B 완료. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+    log(f"[step7] Vicuna-7B loaded. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
     def vicuna_generate(prompt):
         try:
@@ -234,12 +235,12 @@ def main():
         except Exception:
             return ""
 
-    # ── Phase 1 & 2 평가 ─────────────────────────────────────────────────────────
+    # ── Phase 1 & 2 evaluation ───────────────────────────────────────────────────
     results_clean  = []
     results_attack = []
     acc_clean = acc_attack = 0
 
-    log(f"\n[step8] Phase 1 (Clean) + Phase 2 (Collateral Attack) 평가 (N={len(queries)})...")
+    log(f"\n[step8] Phase 1 (Clean) + Phase 2 (Collateral Attack) evaluation (N={len(queries)})...")
 
     for i, (query, c_ans) in enumerate(
         tqdm(zip(queries, correct_ans), total=len(queries), desc="eval")
@@ -314,7 +315,7 @@ def main():
     log(f"[result] Avg adv docs in top-{args.top_k} = {avg_adv_in_top5:.3f}")
     log(f"{'='*60}")
 
-    # ── 저장 ─────────────────────────────────────────────────────────────────────
+    # ── Save ──────────────────────────────────────────────────────────────────────
     pd.DataFrame(results_clean).to_csv(
         os.path.join(args.out_dir, f"clean_{ts}.csv"), index=False)
     pd.DataFrame(results_attack).to_csv(

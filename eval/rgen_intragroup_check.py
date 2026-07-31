@@ -2,12 +2,12 @@
 """
 rgen_intragroup_check.py
 
-재훈련 결정 전 최종 게이트 확인:
-  - within-group Kendall τ (SA vs FC 순위 일치도)
-  - σ_generation (group 내 r_gen 분산)
+Final gate check before deciding whether to retrain:
+  - within-group Kendall tau (SA vs FC rank agreement)
+  - sigma_generation (r_gen variance within a group)
 
-τ ≥ 0.85 이거나 σ_gen이 크면 재훈련 효과 희석.
-두 값이 낮으면 재훈련 정당화.
+If tau >= 0.85 or sigma_gen is large, the effect of retraining is diluted.
+If both values are low, retraining is justified.
 
 Usage:
   CUDA_VISIBLE_DEVICES=0 python eval/rgen_intragroup_check.py
@@ -28,11 +28,11 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 import train_grpo_poison as tgp
 
-# ── 설정 ─────────────────────────────────────────────────────
+# ── Config ───────────────────────────────────────────────────
 CKPT      = str(_ROOT / "results/grpo_n2_q500_run1/final_model")
 INPUT_CSV = str(_ROOT / "data/nq_train_validate/nq_500_pd_7b.csv")
-N_QUERIES = 20     # 몇 개 query를 샘플링할지
-G         = 8      # group size (훈련과 동일)
+N_QUERIES = 20     # how many queries to sample
+G         = 8      # group size (same as training)
 DEVICE    = "cuda"
 MAX_TOKENS = 768
 NLL_SHIFT  = 2.0
@@ -42,7 +42,7 @@ _VSYS = (
     "The assistant gives helpful, detailed, and polite answers to the user's questions."
 )
 
-# ── Vicuna 로드 ───────────────────────────────────────────────
+# ── Load Vicuna ──────────────────────────────────────────────
 print("[load] Vicuna-7B ...")
 vic_tok = AutoTokenizer.from_pretrained(tgp.VICUNA_MODEL, use_fast=True)
 if vic_tok.pad_token is None:
@@ -53,7 +53,7 @@ vic_mod = AutoModelForCausalLM.from_pretrained(
 vic_mod.eval(); vic_mod.requires_grad_(False)
 print("[load] Vicuna done.")
 
-# ── Generator (N2 final_model) 로드 ──────────────────────────
+# ── Load the generator (N2 final_model) ──────────────────────
 print(f"[load] Generator {CKPT} ...")
 gen_tok = AutoTokenizer.from_pretrained(CKPT, use_fast=True)
 if gen_tok.pad_token is None:
@@ -65,7 +65,7 @@ gen_mod = PeftModel.from_pretrained(base, CKPT)
 gen_mod.eval(); gen_mod.requires_grad_(False)
 print("[load] Generator done.")
 
-# ── r_gen (두 포맷) ───────────────────────────────────────────
+# ── r_gen (both formats) ─────────────────────────────────────
 def _rgen(prompt: str, target: str) -> float:
     ids_p = vic_tok(prompt, return_tensors="pt",
                     truncation=True, max_length=MAX_TOKENS).input_ids.to(DEVICE)
@@ -89,7 +89,7 @@ def rgen_fc(doc, query, target):
     p = f"{_VSYS} USER: {raw} ASSISTANT:"
     return _rgen(p, target)
 
-# ── 후보 생성 ─────────────────────────────────────────────────
+# ── Generate candidates ──────────────────────────────────────
 def gen_candidates(query, target, seed, prev_docs=[]):
     prompt_text = tgp.format_prompt(gen_tok, query, target, seed, prev_docs)
     enc = gen_tok(prompt_text, return_tensors="pt",
@@ -113,7 +113,7 @@ def gen_candidates(query, target, seed, prev_docs=[]):
             cands.append(txt)
     return cands
 
-# ── 메인 ─────────────────────────────────────────────────────
+# ── Main ─────────────────────────────────────────────────────
 df = pd.read_csv(INPUT_CSV)
 tgp.fit_tfidf(list(df["seed_doc"].astype(str)))
 
@@ -143,25 +143,25 @@ for i, row in tqdm(sample.iterrows(), total=N_QUERIES, desc="queries"):
           f"| SA={np.mean(sa_vals):.3f} | FC={np.mean(fc_vals):.3f}")
 
 print("\n" + "="*55)
-print("  최종 결과 (within-group 평균)")
+print("  Final results (within-group averages)")
 print("="*55)
-print(f"  Kendall τ (SA vs FC)   : {np.mean(group_taus):.4f}  ±{np.std(group_taus):.4f}")
-print(f"  σ_generation (SA)      : {np.mean(group_sigma_sa):.4f}  ±{np.std(group_sigma_sa):.4f}")
-print(f"  σ_generation (FC)      : {np.mean(group_sigma_fc):.4f}  ±{np.std(group_sigma_fc):.4f}")
+print(f"  Kendall tau (SA vs FC) : {np.mean(group_taus):.4f}  +/-{np.std(group_taus):.4f}")
+print(f"  sigma_generation (SA)  : {np.mean(group_sigma_sa):.4f}  +/-{np.std(group_sigma_sa):.4f}")
+print(f"  sigma_generation (FC)  : {np.mean(group_sigma_fc):.4f}  +/-{np.std(group_sigma_fc):.4f}")
 print()
-print("  판단 기준:")
-print(f"  τ={np.mean(group_taus):.3f}  →  ", end="")
+print("  Decision criteria:")
+print(f"  tau={np.mean(group_taus):.3f}  ->  ", end="")
 if np.mean(group_taus) >= 0.85:
-    print("SA/FC 순위 거의 동일 → 재훈련 효과 희석, 재훈련 불필요")
+    print("SA/FC rankings nearly identical -> retraining effect diluted, retraining unnecessary")
 elif np.mean(group_taus) >= 0.60:
-    print("중간 불일치 → minirun으로 추가 확인 권장")
+    print("Moderate disagreement -> recommend a minirun to double-check")
 else:
-    print("SA/FC 순위 크게 다름 → 재훈련 정당화")
+    print("SA/FC rankings differ substantially -> retraining justified")
 
-print(f"  σ_gen(FC)={np.mean(group_sigma_fc):.4f} →  ", end="")
+print(f"  sigma_gen(FC)={np.mean(group_sigma_fc):.4f} ->  ", end="")
 if np.mean(group_sigma_fc) >= 0.08:
-    print("FC r_gen 분산 충분 → 신호 강도 OK")
+    print("FC r_gen variance sufficient -> signal strength OK")
 elif np.mean(group_sigma_fc) >= 0.04:
-    print("FC r_gen 분산 보통 → 신호는 있으나 약함")
+    print("FC r_gen variance moderate -> signal present but weak")
 else:
-    print("FC r_gen 분산 매우 작음 → group 내 차별화 불가 → gradient 희석 위험")
+    print("FC r_gen variance very small -> no within-group differentiation -> risk of gradient dilution")

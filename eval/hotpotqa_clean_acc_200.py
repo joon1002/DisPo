@@ -1,8 +1,8 @@
 """
 hotpotqa_clean_acc_200.py
 
-1단계: val100origin과 유사하지 않은 HotpotQA 쿼리 200개 선정 (TF-IDF cosine 최소)
-2단계: Contriever 전체 corpus 검색(top-5) → Vicuna-7B 생성 → clean ACC 측정
+Step 1: Select 200 HotpotQA queries dissimilar to val100origin (minimal TF-IDF cosine)
+Step 2: Contriever full-corpus retrieval (top-5) -> Vicuna-7B generation -> measure clean ACC
 
 Usage:
   CUDA_VISIBLE_DEVICES=0 python eval/hotpotqa_clean_acc_200.py \
@@ -75,18 +75,18 @@ def encode_queries(texts, model, tokenizer, device, batch_size=64):
 
 
 def select_dissimilar_queries(val100_queries, all_queries, n=200, seed=42):
-    """TF-IDF cosine 기반으로 val100과 최대 유사도가 낮은 쿼리 200개 선정."""
-    print(f"[select] TF-IDF 벡터화 ({len(all_queries):,} 쿼리)...")
+    """Selects the 200 queries with the lowest max TF-IDF cosine similarity to val100."""
+    print(f"[select] TF-IDF vectorization ({len(all_queries):,} queries)...")
     val100_texts = [q["text"] for q in val100_queries]
     all_texts    = [q["text"] for q in all_queries]
 
-    # val100과 겹치는 쿼리 제거
+    # Remove queries overlapping with val100
     val100_set = set(t.lower().strip() for t in val100_texts)
     candidates = [q for q in all_queries if q["text"].lower().strip() not in val100_set]
     cand_texts = [q["text"] for q in candidates]
-    print(f"[select] val100 제외 후 후보: {len(candidates):,}")
+    print(f"[select] Candidates after excluding val100: {len(candidates):,}")
 
-    # TF-IDF 피팅 (val100 + 후보 전체)
+    # Fit TF-IDF (val100 + all candidates)
     vec = TfidfVectorizer(max_features=30000, stop_words="english")
     combined = val100_texts + cand_texts
     tfidf_all = vec.fit_transform(combined)
@@ -94,25 +94,25 @@ def select_dissimilar_queries(val100_queries, all_queries, n=200, seed=42):
     val100_tfidf = tfidf_all[:len(val100_texts)]
     cand_tfidf   = tfidf_all[len(val100_texts):]
 
-    # 각 후보별 val100 쿼리들과의 최대 cosine 유사도
-    print("[select] 유사도 계산 중...")
+    # Max cosine similarity of each candidate to the val100 queries
+    print("[select] Computing similarity...")
     chunk = 5000
     max_sims = np.zeros(len(candidates), dtype=np.float32)
     for i in range(0, len(candidates), chunk):
         sims = cosine_similarity(cand_tfidf[i:i+chunk], val100_tfidf)
         max_sims[i:i+chunk] = sims.max(axis=1)
 
-    # 유사도 낮은 순 정렬 → 상위 n개
+    # Sort by ascending similarity -> take the top n
     order = np.argsort(max_sims)
     rng = np.random.default_rng(seed)
-    # 유사도 가장 낮은 500개 중 무작위 200개 (너무 단순한 쿼리 방지)
+    # Randomly pick 200 out of the 500 lowest-similarity queries (avoids overly trivial queries)
     pool = order[:500]
     chosen_idx = rng.choice(pool, size=n, replace=False)
     chosen_idx.sort()
 
     selected = [candidates[i] for i in chosen_idx]
     sel_sims  = [float(max_sims[i]) for i in chosen_idx]
-    print(f"[select] 선정된 200개 max-sim 통계: "
+    print(f"[select] max-sim stats for the selected 200: "
           f"min={min(sel_sims):.4f}, max={max(sel_sims):.4f}, avg={sum(sel_sims)/len(sel_sims):.4f}")
     return selected
 
@@ -126,7 +126,7 @@ def main():
     parser.add_argument("--n_queries",   type=int, default=200)
     parser.add_argument("--seed",        type=int, default=42)
     parser.add_argument("--exclude_csv", type=str, default="",
-                        help="이미 선정된 쿼리 CSV (text 컬럼). 중복 제외에 사용.")
+                        help="CSV of already-selected queries (text column). Used to exclude duplicates.")
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -142,20 +142,20 @@ def main():
     device = f"cuda:{args.gpu_id}" if torch.cuda.is_available() else "cpu"
     log(f"[config] device={device}, top_k={args.top_k}, n_queries={args.n_queries}")
 
-    # ── 1단계: 쿼리 선정 ────────────────────────────────────────────────────────
-    log("\n[step1] val100origin 쿼리 로드...")
+    # ── Step 1: Select queries ──────────────────────────────────────────────────
+    log("\n[step1] Loading val100origin queries...")
     val100_df = pd.read_csv(_VAL100_CSV)
     val100_queries = [{"text": str(r["query"]).strip()} for _, r in val100_df.iterrows()]
-    log(f"[step1] val100 쿼리 수: {len(val100_queries)}")
+    log(f"[step1] val100 query count: {len(val100_queries)}")
 
-    # 이미 선정된 쿼리 제외 목록 구성
+    # Build the exclusion list of already-selected queries
     exclude_texts = set()
     if args.exclude_csv and os.path.exists(args.exclude_csv):
         exc_df = pd.read_csv(args.exclude_csv)
         exclude_texts = set(exc_df["text"].str.lower().str.strip())
-        log(f"[step1] 기존 선정 쿼리 제외: {len(exclude_texts)}개")
+        log(f"[step1] Excluding previously selected queries: {len(exclude_texts)}")
 
-    log("[step1] HotpotQA 전체 쿼리 로드...")
+    log("[step1] Loading all HotpotQA queries...")
     all_queries = []
     with open(_QUERIES_PATH) as f:
         for line in f:
@@ -165,29 +165,29 @@ def main():
                 "text":   d["text"],
                 "answer": d["metadata"].get("answer", ""),
             })
-    log(f"[step1] 전체 쿼리 수: {len(all_queries):,}")
+    log(f"[step1] Total query count: {len(all_queries):,}")
 
     if exclude_texts:
         all_queries = [q for q in all_queries
                        if q["text"].lower().strip() not in exclude_texts]
-        log(f"[step1] 기존 선정 제외 후: {len(all_queries):,}")
+        log(f"[step1] After excluding previously selected: {len(all_queries):,}")
 
     selected = select_dissimilar_queries(val100_queries, all_queries,
                                          n=args.n_queries, seed=args.seed)
 
     sel_csv = os.path.join(args.out_dir, f"selected_{args.n_queries}_queries.csv")
     pd.DataFrame(selected).to_csv(sel_csv, index=False)
-    log(f"[step1] 선정 쿼리 저장: {sel_csv}")
+    log(f"[step1] Saved selected queries: {sel_csv}")
 
-    # ── 2단계: Contriever 로드 ──────────────────────────────────────────────────
-    log(f"\n[step2] Contriever 로드: {_CONTRIEVER_HF}")
+    # ── Step 2: Load Contriever ─────────────────────────────────────────────────
+    log(f"\n[step2] Loading Contriever: {_CONTRIEVER_HF}")
     ctv_tok = AutoTokenizer.from_pretrained(_CONTRIEVER_HF)
     ctv_mod = AutoModel.from_pretrained(_CONTRIEVER_HF, torch_dtype=torch.float32).to(device)
     ctv_mod.eval()
-    log("[step2] Contriever 완료")
+    log("[step2] Contriever loaded")
 
-    # ── 3단계: corpus 텍스트 로드 ───────────────────────────────────────────────
-    log("\n[step3] corpus.jsonl 로드 (5.2M passages)...")
+    # ── Step 3: Load corpus texts ───────────────────────────────────────────────
+    log("\n[step3] Loading corpus.jsonl (5.2M passages)...")
     corpus_ids   = []
     corpus_texts = []
     with open(_CORPUS_PATH) as f:
@@ -197,30 +197,30 @@ def main():
             corpus_texts.append(d.get("text", ""))
     log(f"[step3] corpus {len(corpus_texts):,} passages")
 
-    # ── 4단계: corpus 임베딩 GPU 로드 ───────────────────────────────────────────
-    log(f"\n[step4] corpus 임베딩 로드: {_EMB_CACHE}")
+    # ── Step 4: Load corpus embeddings to GPU ───────────────────────────────────
+    log(f"\n[step4] Loading corpus embeddings: {_EMB_CACHE}")
     corpus_embs = torch.load(_EMB_CACHE, map_location="cpu", weights_only=True)
     log(f"[step4] corpus_embs shape={corpus_embs.shape}, dtype={corpus_embs.dtype}")
-    log("[step4] GPU 전송 (float16)...")
+    log("[step4] Transferring to GPU (float16)...")
     corpus_embs_gpu = corpus_embs.half().to(device)
     del corpus_embs
     gc.collect()
-    log(f"[step4] GPU 메모리: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+    log(f"[step4] GPU memory: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
-    # ── 5단계: 쿼리 임베딩 ─────────────────────────────────────────────────────
-    log("\n[step5] 쿼리 200개 임베딩...")
+    # ── Step 5: Embed queries ───────────────────────────────────────────────────
+    log("\n[step5] Embedding 200 queries...")
     query_texts = [q["text"] for q in selected]
     q_embs = encode_queries(query_texts, ctv_mod, ctv_tok, device)  # [200, 768]
     q_embs = q_embs.half()
     log(f"[step5] q_embs shape={q_embs.shape}")
 
-    # Contriever 불필요 → 해제
+    # Contriever no longer needed -> free it
     del ctv_mod, ctv_tok
     gc.collect()
     torch.cuda.empty_cache()
 
-    # ── 6단계: top-k 검색 ───────────────────────────────────────────────────────
-    log(f"\n[step6] top-{args.top_k} 검색...")
+    # ── Step 6: top-k retrieval ─────────────────────────────────────────────────
+    log(f"\n[step6] top-{args.top_k} retrieval...")
     topk_indices = []
     chunk = 50
     for i in range(0, len(q_embs), chunk):
@@ -229,19 +229,19 @@ def main():
         topk    = torch.topk(scores, k=args.top_k, dim=1).indices.cpu()
         topk_indices.append(topk)
     topk_indices = torch.cat(topk_indices, dim=0)  # [200, top_k]
-    log(f"[step6] 검색 완료. topk_indices shape={topk_indices.shape}")
+    log(f"[step6] Retrieval complete. topk_indices shape={topk_indices.shape}")
 
     del corpus_embs_gpu, q_embs
     gc.collect()
     torch.cuda.empty_cache()
-    log(f"[step6] corpus 임베딩 해제 후 GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+    log(f"[step6] GPU after freeing corpus embeddings: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
-    # ── 7단계: Vicuna-7B 로드 ───────────────────────────────────────────────────
-    log("\n[step7] Vicuna-7B 로드 (fastchat)...")
+    # ── Step 7: Load Vicuna-7B ──────────────────────────────────────────────────
+    log("\n[step7] Loading Vicuna-7B (fastchat)...")
     try:
         from fastchat.model import load_model, get_conversation_template
     except ImportError:
-        raise ImportError("fastchat 없음. 올바른 venv 사용: /path/to/ragatt/.venv")
+        raise ImportError("fastchat not found. Use the correct venv: /path/to/ragatt/.venv")
 
     llm_model, llm_tok = load_model(
         model_path=_VICUNA_MODEL, device="cuda", num_gpus=1,
@@ -249,7 +249,7 @@ def main():
         load_8bit=False, cpu_offloading=False, revision="main", debug=False,
     )
     llm_model.eval()
-    log(f"[step7] Vicuna-7B 완료. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
+    log(f"[step7] Vicuna-7B loaded. GPU: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
     def vicuna_generate(prompt):
         try:
@@ -270,8 +270,8 @@ def main():
         except Exception as e:
             return ""
 
-    # ── 8단계: 생성 및 ACC 측정 ─────────────────────────────────────────────────
-    log("\n[step8] 생성 및 ACC 측정...")
+    # ── Step 8: Generation and ACC measurement ──────────────────────────────────
+    log("\n[step8] Generation and ACC measurement...")
     rows = []
     acc_cnt = 0
 
@@ -302,16 +302,16 @@ def main():
     final_acc = acc_cnt / len(rows)
     acc_queries = [r for r in rows if r["accuracy"]]
     log(f"\n[result] N={len(rows)}, Clean ACC = {final_acc:.2%}  ({acc_cnt}/{len(rows)})")
-    log(f"[result] ACC 성공 쿼리 수: {len(acc_queries)}")
+    log(f"[result] ACC-success query count: {len(acc_queries)}")
 
-    # ── 저장 ────────────────────────────────────────────────────────────────────
+    # ── Save ─────────────────────────────────────────────────────────────────────
     res_csv = os.path.join(args.out_dir, f"results_{ts}.csv")
     pd.DataFrame(rows).to_csv(res_csv, index=False)
 
-    # ACC 성공 쿼리만 별도 저장
+    # Save ACC-success queries separately
     acc_csv = os.path.join(args.out_dir, f"acc_success_{ts}.csv")
     pd.DataFrame(acc_queries).to_csv(acc_csv, index=False)
-    log(f"[save] ACC 성공 쿼리: {acc_csv}")
+    log(f"[save] ACC-success queries: {acc_csv}")
 
     summary = {
         "n_queries":       len(rows),
