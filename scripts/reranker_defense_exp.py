@@ -1,14 +1,14 @@
 """
 Reranker Defense Experiment
 
-흐름:
-  1. pd_eval100.csv 로드 (100쿼리 × 4 poison docs)
-  2. BEIR NQ corpus에서 쿼리별 normal docs 추출
-  3. Contriever로 top-k=5 retrieval
-  4. cross-encoder/ms-marco-MiniLM-L-6-v2 로 reranking 점수 계산
-  5. poison docs의 순위 변화 + reranker score 분포 분석
+Flow:
+  1. Load pd_eval100.csv (100 queries x 4 poison docs)
+  2. Extract per-query normal docs from the BEIR NQ corpus
+  3. Retrieve top-k=5 with Contriever
+  4. Compute reranking scores with cross-encoder/ms-marco-MiniLM-L-6-v2
+  5. Analyze the rank change of poison docs + the reranker score distribution
 
-Usage (다른 서버에서 실행):
+Usage (running on another server):
   git pull
   source .venv/bin/activate
   CUDA_VISIBLE_DEVICES=0 python scripts/reranker_defense_exp.py
@@ -22,7 +22,7 @@ from transformers import AutoTokenizer, AutoModel
 from sentence_transformers import CrossEncoder
 from itertools import combinations
 
-# ─── argparse (서버별 경로 오버라이드) ──────────────────────────
+# ─── argparse (per-server path overrides) ──────────────────────
 _DATA_ROOT = os.environ.get("DIPOISON_DATA_ROOT", "/path/to")
 _p = argparse.ArgumentParser()
 _p.add_argument("--docs_csv",    required=True,
@@ -184,7 +184,7 @@ print(f"[skip] no BEIR id: {no_beir_id}")
 
 # ─── aggregation ─────────────────────────────────────────────
 with_poison = [r for r in results if r["poison_in_topk"] > 0]
-print(f"\n쿼리 수: {len(results)} | poison이 top-{TOP_K}에 들어온 쿼리: {len(with_poison)}")
+print(f"\nQueries: {len(results)} | queries with poison in top-{TOP_K}: {len(with_poison)}")
 
 # poison docs rank distribution (0-indexed, lower=better rank)
 all_ctv_ranks    = [r for entry in with_poison for r in entry["poison_ctv_ranks"]]
@@ -192,34 +192,34 @@ all_rerank_ranks = [r for entry in with_poison for r in entry["poison_rerank_ran
 all_poison_scores  = [s for entry in with_poison for s in entry["poison_rerank_scores"]]
 all_normal_scores  = [s for entry in with_poison for s in entry["normal_rerank_scores"]]
 
-print(f"\n========== Contriever top-{TOP_K} retrieval 후 poison doc 순위 ==========")
-print(f"  poison docs 수: {len(all_ctv_ranks)}개")
-print(f"  Contriever rank (0=1위): mean={np.mean(all_ctv_ranks):.2f} | "
+print(f"\n========== Poison doc rank after Contriever top-{TOP_K} retrieval ==========")
+print(f"  Number of poison docs: {len(all_ctv_ranks)}")
+print(f"  Contriever rank (0=1st): mean={np.mean(all_ctv_ranks):.2f} | "
       f"rank0: {all_ctv_ranks.count(0)}, rank1: {all_ctv_ranks.count(1)}, "
       f"rank2: {all_ctv_ranks.count(2)}, rank3: {all_ctv_ranks.count(3)}, rank4: {all_ctv_ranks.count(4)}")
-print(f"  Reranker rank  (0=1위): mean={np.mean(all_rerank_ranks):.2f} | "
+print(f"  Reranker rank  (0=1st): mean={np.mean(all_rerank_ranks):.2f} | "
       f"rank0: {all_rerank_ranks.count(0)}, rank1: {all_rerank_ranks.count(1)}, "
       f"rank2: {all_rerank_ranks.count(2)}, rank3: {all_rerank_ranks.count(3)}, rank4: {all_rerank_ranks.count(4)}")
 
-print(f"\n========== Reranker 점수 비교 ==========")
-print(f"  Poison docs  점수: mean={np.mean(all_poison_scores):7.4f}  "
+print(f"\n========== Reranker score comparison ==========")
+print(f"  Poison docs  score: mean={np.mean(all_poison_scores):7.4f}  "
       f"std={np.std(all_poison_scores):.4f}  min={min(all_poison_scores):.4f}  max={max(all_poison_scores):.4f}")
-print(f"  Normal docs  점수: mean={np.mean(all_normal_scores):7.4f}  "
+print(f"  Normal docs  score: mean={np.mean(all_normal_scores):7.4f}  "
       f"std={np.std(all_normal_scores):.4f}  min={min(all_normal_scores):.4f}  max={max(all_normal_scores):.4f}")
 
-# 순위 상승/하락 분석
+# Rank increase/decrease analysis
 rank_changes = [r - c for c, r in zip(all_ctv_ranks, all_rerank_ranks)]
-demoted = sum(1 for rc in rank_changes if rc > 0)   # 순위 하락 (더 낮은 순위로)
+demoted = sum(1 for rc in rank_changes if rc > 0)   # demoted to a lower rank
 promoted= sum(1 for rc in rank_changes if rc < 0)
 same    = sum(1 for rc in rank_changes if rc == 0)
-print(f"\n========== Reranking 후 순위 변화 ==========")
-print(f"  순위 하락(demoted): {demoted}/{len(rank_changes)} ({demoted/len(rank_changes)*100:.1f}%)")
-print(f"  순위 유지(same):    {same}/{len(rank_changes)} ({same/len(rank_changes)*100:.1f}%)")
-print(f"  순위 상승(promoted):{promoted}/{len(rank_changes)} ({promoted/len(rank_changes)*100:.1f}%)")
-print(f"  평균 순위 변화: {np.mean(rank_changes):+.2f} (+가 하락, -가 상승)")
+print(f"\n========== Rank change after reranking ==========")
+print(f"  demoted: {demoted}/{len(rank_changes)} ({demoted/len(rank_changes)*100:.1f}%)")
+print(f"  same:    {same}/{len(rank_changes)} ({same/len(rank_changes)*100:.1f}%)")
+print(f"  promoted:{promoted}/{len(rank_changes)} ({promoted/len(rank_changes)*100:.1f}%)")
+print(f"  Mean rank change: {np.mean(rank_changes):+.2f} (+ is demoted, - is promoted)")
 
-# 임계값 분석: 몇 개를 제거하면 poison 제거율
-print(f"\n========== 방어 시나리오: 하위 N개 제거 (top-{TOP_K}에서) ==========")
+# Threshold analysis: poison removal rate for dropping the bottom N
+print(f"\n========== Defense scenario: drop the bottom N (from top-{TOP_K}) ==========")
 # if we remove the bottom-scoring doc after reranking
 # poison rank 3 or 4 = would be removed if we drop bottom 1 or 2
 for drop_n in [1, 2, 3]:
@@ -228,5 +228,5 @@ for drop_n in [1, 2, 3]:
                          for score_idx, s in enumerate(entry["normal_rerank_scores"])
                          if sorted(entry["normal_rerank_scores"])[::-1].index(s) >= (TOP_K - drop_n - entry["poison_in_topk"]))
     total_poison = len(all_rerank_ranks)
-    print(f"  하위 {drop_n}개 제거: poison 제거율 = {removed_poison}/{total_poison} ({removed_poison/total_poison*100:.1f}%)")
+    print(f"  Dropping bottom {drop_n}: poison removal rate = {removed_poison}/{total_poison} ({removed_poison/total_poison*100:.1f}%)")
 
