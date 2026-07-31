@@ -76,16 +76,17 @@ ASR_sub: target_answer ∈ response (substring match)
 
 ### 4. RAGDefender (RD) 평가
 
-RAGDefender (Xue et al., 2024) 2단계 방어를 적용한 후 LLM 평가:
+RAGDefender (Xue et al., 2024) 2단계 방어를 적용한 후 LLM 평가. **NQ/MS MARCO(싱글홉, 기본 세팅)와 HotpotQA(멀티홉 전용)는 Stage 1 알고리즘 자체가 다릅니다** — 멀티홉 근거 문서는 서로 다른 문서에서 오더라도 정상적으로 다양할 수 있어, 싱글홉과 같은 클러스터링 기준을 그대로 쓰면 정상 문서까지 오탐하기 때문입니다.
 
-**Stage 1 — Agglomerative Clustering + TF-IDF**
-- top-k 문서를 2-cluster로 분류 (paraphrase-MiniLM-L6-v2 임베딩)
-- TF-IDF 빈도 점수로 악성 클러스터 추정 → `n_adv` 개 제거 후보 식별
+**[기본] NQ / MS MARCO — clustering-based grouping (singlehop)**
+- 스크립트: `main_dipoison_ragdef_beir.py`, `main_dipoison_fullcorpus_ragdef.py`, `multi_retriever_ragdef_eval.py`
+- Stage 1 — Agglomerative Clustering + TF-IDF: top-k 문서를 2-cluster로 분류(paraphrase-MiniLM-L6-v2 임베딩) → TF-IDF 빈도 점수로 악성 클러스터 추정 → `n_adv` 개 제거 후보 식별 (`find_num_adv_agg_with_stage1()` / `ragdefender_singlehop()`)
+- Stage 2 — Pairwise Frequency-Score Filter: top `n_adv*(n_adv-1)/2` 쌍에 대해 유사도 점수 누적 → 점수 높은 문서를 악성으로 판단 → 제거, 생존 문서만 LLM에 전달
 
-**Stage 2 — Pairwise Frequency-Score Filter**
-- top `n_adv*(n_adv-1)/2` 쌍에 대해 유사도 점수 누적
-- 점수 높은 문서를 악성으로 판단 → 제거
-- 생존 문서만 LLM에 전달
+**HotpotQA 전용 — concentration-based grouping (multihop)**
+- 스크립트: `hotpotqa_multihop_ragdef_v2_eval.py`
+- Stage 1 — 클러스터링 대신, top-k 문서 간 pairwise 코사인 유사도의 평균/중앙값이 비정상적으로 높은 문서를 악성으로 추정해 `n_adv`를 결정 (`find_num_adv_multihop()`)
+- Stage 2 — 이후 절차는 싱글홉과 동일한 pairwise frequency-score filter (`ragdefender_multihop()`)
 
 ### 5. 지표 계산
 
@@ -203,4 +204,5 @@ CSV 주요 컬럼:
 
 - 논문: *RAGDefender: Defending Against Retrieval-Augmented Generation Poisoning Attacks* (Xue et al., 2024)
 - 방어 모델: `paraphrase-MiniLM-L6-v2` (SentenceTransformer)
-- 방어 로직 구현: `main_dipoison_ragdef_beir.py` 내 `find_num_adv_agg_with_stage1()`, `top_similar_pairs()` 함수
+- 싱글홉(NQ/MS MARCO) 방어 로직: `main_dipoison_ragdef_beir.py` 내 `find_num_adv_agg_with_stage1()`, `top_similar_pairs()` 함수
+- 멀티홉(HotpotQA) 방어 로직: `hotpotqa_multihop_ragdef_v2_eval.py` 내 `find_num_adv_multihop()`, `ragdefender_multihop()` 함수
