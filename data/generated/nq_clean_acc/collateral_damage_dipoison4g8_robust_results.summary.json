@@ -1,9 +1,0 @@
-{
-  "n_victim_queries": 100,
-  "n_poison_docs": 400,
-  "top_k": 5,
-  "clean_acc": 0.99,
-  "poisoned_acc": 0.97,
-  "delta_pp": -2.0,
-  "collision_rate": 0.07
-}

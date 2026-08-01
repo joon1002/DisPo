@@ -8,12 +8,11 @@ This document catalogs the baseline N=4 poison-document artifacts trained on NQ 
 |---|---|---|---:|---|---|
 | v7-cont / Contriever | `data/generated/pd_eval100_cont_n4g8.csv` | `/path/to/nq/results/grpo_whitebox_v7_1.5b_run1/pd_eval100_v7.csv` | 100 | `doc0_seed`, `doc1`, `doc2`, `doc3` | `e73157d4fa6b297214573b797a1b3efc69c10d7ed3a00dabca11cfabfdebebef` |
 | v7-e5 / E5-base | `data/generated/pd_eval100_e5_n4g8.csv` | `/path/to/nq/results/grpo_whitebox_v7_e5_run2/pd_eval100_v7_e5_g8.csv` | 100 | `doc0_seed`, `doc1`, `doc2`, `doc3` | `6e5e7e69dbe14671cdb065ac82e1efdc195a475f4ca2c019f7a796735ba626f5` |
-| merged seed | `data/generated/pd_eval100_merged_seed.csv` | `/path/to/nq/results/eval_csv/pd_eval100_v7_merged_g8.csv` | 100 | `doc0_seed`, `doc1` ... `doc6` | `c8299a404672586e68a873836d431070f8d6a60a9bd406dda1f4e3fed5b9a587` |
-| merged noseed | `data/generated/pd_eval100_merged_noseed.csv` | derived from merged seed by dropping `doc0_seed` | 100 | `doc1` ... `doc6` | `f3a36ad1d5d82adc918613738f03052208c19b700119dff49aa172006e5afd77` |
+| merged (N=7) | `data/generated/pd_eval100_merged_n7.csv` | `/path/to/nq/results/eval_csv/pd_eval100_v7_merged_g8.csv` | 100 | `doc0_seed`, `doc1` ... `doc6` | `c8299a404672586e68a873836d431070f8d6a60a9bd406dda1f4e3fed5b9a587` |
 
-The two canonical CSVs are currently git-tracked and are byte-level identical to the source run outputs above. The `*_noseed.csv` files are evaluation-only derivatives with the seed document removed; they are not original N=4 artifacts.
+The two canonical CSVs are currently git-tracked and are byte-level identical to the source run outputs above.
 
-The merged seed file is an N=7 artifact combining the generated documents of the two N=4 files above. In every row, `doc0_seed` is the seed shared by cont/e5, `doc1`~`doc3` are the v7-cont generated documents, and `doc4`~`doc6` are the v7-e5 generated documents. The merged noseed file is an evaluation-only derivative keeping just those same 6 generated documents.
+The merged file is an N=7 artifact combining the generated documents of the two N=4 files above. In every row, `doc0_seed` is the seed shared by cont/e5, `doc1`~`doc3` are the v7-cont generated documents, and `doc4`~`doc6` are the v7-e5 generated documents. (A seed-stripped `*_noseed` derivative was previously tracked for an exploratory check; it is not used by any reproduction script and has been removed from the submission package.)
 
 ## Train setup
 
