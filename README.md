@@ -2,7 +2,7 @@
 
 Reference implementation for DiPoison: a GRPO-based RAG poison-document generator that
 jointly optimizes retrieval, semantic/lexical dispersion, payload, and fluency rewards,
-trained with a Qwen2.5-1.5B policy against Contriever or E5 as the white-box surrogate
+trained with a Qwen2.5-1.5B policy against Contriever or E5 as the surrogate
 retriever.
 
 This package contains the code needed to reproduce the paper's tables and figures. It
