@@ -21,7 +21,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 _ATTACK_DATA_ROOT = os.environ.get("DIPOISON_ATTACK_DATA_ROOT", "/path/to")
 
 DEFAULT_ATTACKS = {
-    "dipoison_full":   str(_ROOT / "data/generated/pd_eval100_cont_n4g8.csv"),
+    "dipoison_full":   str(_ROOT / "data/attackbaselines_pd/DiPoison/nq/pd_eval100_cont_n4g8.csv"),
     "abl_no_ret":   f"{_ATTACK_DATA_ROOT}/results/grpo_whitebox_abl_no_ret_run1/pd_eval100_abl_no_ret_g8_b8.csv",
     "abl_no_disp":  f"{_ATTACK_DATA_ROOT}/results/grpo_whitebox_abl_no_disp_run1/pd_eval100_abl_no_disp.csv",
     "abl_no_tfidf": f"{_ATTACK_DATA_ROOT}/results/grpo_whitebox_abl_no_tfidf_run1/pd_eval100_abl_no_tfidf.csv",

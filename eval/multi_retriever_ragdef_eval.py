@@ -12,7 +12,7 @@ Usage:
   CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 /path/to/ragdef/.venv/bin/python \\
     eval/multi_retriever_ragdef_eval.py \\
     --dataset nq \\
-    --docs_csv data/generated/pd_eval100_merged_n7.csv \\
+    --docs_csv data/attackbaselines_pd/DiPoison/nq/pd_eval100_merged_n7.csv \\
     --out_json eval/results/multi_retriever_ragdef/pd_eval100_merged_n7_summary.json
 
   # On an MSMARCO server, just point --corpus_path/--cache_dir at that server's paths

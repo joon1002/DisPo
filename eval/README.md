@@ -106,7 +106,7 @@ unseen embedding space (any arbitrary SentenceTransformer ID also works):
 # NQ, unseen defense space = MPNet
 CUDA_VISIBLE_DEVICES=0 python main_dipoison_fullcorpus_ragdef.py \
     --dataset nq --retrieval_model contriever \
-    --docs_csv data/generated/pd_eval100_cont_n4g8.csv \
+    --docs_csv data/attackbaselines_pd/DiPoison/nq/pd_eval100_cont_n4g8.csv \
     --defense_model mpnet --adv_per_query 4 --top_k 5 --gpu_id 0
 ```
 
@@ -131,7 +131,7 @@ cd eval/
 CUDA_VISIBLE_DEVICES=0 python main_dipoison_fullcorpus_ragdef.py \
     --dataset           nq \
     --retrieval_model   contriever \
-    --docs_csv          ../data/generated/pd_eval100_cont_n4g8.csv \
+    --docs_csv          ../data/attackbaselines_pd/DiPoison/nq/pd_eval100_cont_n4g8.csv \
     --adv_per_query     4 \
     --top_k             5 \
     --gpu_id            0
@@ -146,7 +146,7 @@ the paper (contriever, e5, ance, bge-base, mpnet, bm25, nomic-v1.5, contriever-m
 # NQ (using the merged N=7 poison set)
 CUDA_VISIBLE_DEVICES=0 python eval/multi_retriever_ragdef_eval.py \
     --dataset   nq \
-    --docs_csv  data/generated/pd_eval100_merged_n7.csv \
+    --docs_csv  data/attackbaselines_pd/DiPoison/nq/pd_eval100_merged_n7.csv \
     --out_json  eval/results/multi_retriever_ragdef/pd_eval100_merged_n7_summary.json
     # --top_ks defaults to "5,10" (runs top-5/top-10 together)
 
@@ -169,7 +169,7 @@ CUDA_VISIBLE_DEVICES=0 python eval/hotpotqa_merged_multihop_8ret_eval.py \
 ```bash
 CUDA_VISIBLE_DEVICES=0 python eval/main_dipoison_fullcorpus_ragdef.py \
     --dataset nq --retrieval_model e5-base \
-    --docs_csv ../data/generated/pd_eval100_e5_n4g8.csv \
+    --docs_csv ../data/attackbaselines_pd/DiPoison/nq/pd_eval100_e5_n4g8.csv \
     --adv_per_query 4 --top_k 5 --gpu_id 0
 ```
 
@@ -177,7 +177,7 @@ CUDA_VISIBLE_DEVICES=0 python eval/main_dipoison_fullcorpus_ragdef.py \
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python eval/gen_asr_eval.py \
-    --docs_csv  ../data/generated/pd_eval100_cont_n4g8.csv \
+    --docs_csv  ../data/attackbaselines_pd/DiPoison/nq/pd_eval100_cont_n4g8.csv \
     --input_csv ../data/nq100_validate.csv \
     --generator mistralai/Mistral-7B-Instruct-v0.3 \
     --gpu_id 0

@@ -21,7 +21,7 @@ DEFAULT_ATTACKS = {
     "jointgcg": f"{_ATTACK_DATA_ROOT}/results/attackbaselines_pd/jointgcg4_nq100.csv",
     "ragparadox": f"{_ATTACK_DATA_ROOT}/results/attackbaselines_pd/ragparadox_nq100_n4.csv",
     "confundo": f"{_ATTACK_DATA_ROOT}/results/attackbaselines_pd/confundo_500input_nq_N4_temp0.7_v2.csv",
-    "dipoison_v7_cont_n4g8": str(_ROOT / "data/generated/pd_eval100_cont_n4g8.csv"),
+    "dipoison_v7_cont_n4g8": str(_ROOT / "data/attackbaselines_pd/DiPoison/nq/pd_eval100_cont_n4g8.csv"),
 }
 
 
