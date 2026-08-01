@@ -21,7 +21,7 @@ Final loss:
 
 Usage:
   CUDA_VISIBLE_DEVICES=0 python train_grpo_poison.py \\
-    --input          data/nq_train_validate/nq_500_pd_7b.csv \\
+    --input          data/nq_train_validate/nq_train500.csv \\
     --output_dir     results/grpo_run1 \\
     --generator_model Qwen/Qwen2.5-1.5B-Instruct \\
     --vicuna_model    lmsys/vicuna-7b-v1.3 \\
@@ -49,7 +49,7 @@ from sentence_transformers import SentenceTransformer
 # ─────────────────────────────────────────────────────────
 # CONSTANTS / DEFAULTS
 # ─────────────────────────────────────────────────────────
-DEFAULT_INPUT     = "data/nq_train_validate/nq_500_pd_7b.csv"
+DEFAULT_INPUT     = "data/nq_train_validate/nq_train500.csv"
 DEFAULT_OUTPUT    = "results/grpo_run1"
 GENERATOR_MODEL   = "Qwen/Qwen2.5-1.5B-Instruct"
 RETRIEVAL_MODEL   = "facebook/contriever"

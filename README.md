@@ -101,7 +101,7 @@ for those two experiments specifically.
 
 | File | Columns | Description |
 |------|------|------|
-| `nq_train100.csv` / `nq_train300.csv` / `nq_500_pd_7b.csv` | `query`, `target_answer`, `seed_doc` | Training. `nq_train100`/`nq_train300` are the first 100/300 queries of `nq_500_pd_7b` (training-query-count sensitivity: 100/300/500) |
+| `nq_train100.csv` / `nq_train300.csv` / `nq_train500.csv` | `query`, `target_answer`, `seed_doc` | Training-query-count sensitivity (100/300/500). `nq_train100` is an independently sampled 100-query set (disjoint from `nq_train500`); `nq_train300` is the first 300 queries of `nq_train500` |
 | `nq100_validate.csv` | `query`, `target_answer`, `seed_doc` | Evaluation: 100 queries disjoint from training |
 
 ---
@@ -111,12 +111,12 @@ for those two experiments specifically.
 ```bash
 # Default (Contriever + Vicuna-7B), GPU 0, 500 queries, epoch=3, G=8, N=4
 CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison.py \
-    --input      data/nq_train_validate/nq_500_pd_7b.csv \
+    --input      data/nq_train_validate/nq_train500.csv \
     --output_dir results/grpo_run1
 
 # E5 surrogate
 CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison_e5.py \
-    --input      data/nq_train_validate/nq_500_pd_7b.csv \
+    --input      data/nq_train_validate/nq_train500.csv \
     --output_dir results/grpo_e5_run1
 
 # Training-query-count sensitivity (100 / 300, in addition to the default 500)
@@ -130,7 +130,7 @@ CUDA_VISIBLE_DEVICES=0 python scripts/train_grpo_poison.py \
 
 | Argument | Default | Description |
 |------|--------|------|
-| `--input` | `data/nq_train_validate/nq_500_pd_7b.csv` | Training query CSV |
+| `--input` | `data/nq_train_validate/nq_train500.csv` | Training query CSV |
 | `--output_dir` | `results/grpo_run1` | Checkpoint output path |
 | `--num_epochs` | `3` | Number of training epochs |
 | `--group_size` | `8` | GRPO group size **(G)** — candidates generated per query |

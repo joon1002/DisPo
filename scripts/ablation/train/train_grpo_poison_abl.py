@@ -55,7 +55,7 @@ from sentence_transformers import SentenceTransformer
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Located at scripts/ablation/train/ -> repo root is 3 levels up
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR)))
-DEFAULT_INPUT     = os.path.join(PROJECT_ROOT, "data", "nq_500_pd_7b.csv")
+DEFAULT_INPUT     = os.path.join(PROJECT_ROOT, "data", "nq_train_validate", "nq_train500.csv")
 DEFAULT_OUTPUT    = os.path.join(PROJECT_ROOT, "results", "grpo_whitebox_abl_run1")
 GENERATOR_MODEL   = "Qwen/Qwen2.5-1.5B-Instruct"
 

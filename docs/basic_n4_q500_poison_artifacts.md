@@ -19,7 +19,7 @@ The merged seed file is an N=7 artifact combining the generated documents of the
 
 | Parameter | v7-cont / Contriever | v7-e5 / E5-base |
 |---|---|---|
-| Train input | `/path/to/nq/results/nq_500_pd_7b.csv` (500 rows) | same |
+| Train input | `/path/to/nq/results/nq_train500.csv` (500 rows) | same |
 | Evaluation input | `/path/to/nq/results/nq100_validate.csv` (100 rows) | same |
 | Generator | `Qwen/Qwen2.5-1.5B-Instruct` | same |
 | Surrogate LLM | `lmsys/vicuna-7b-v1.3` | same |
