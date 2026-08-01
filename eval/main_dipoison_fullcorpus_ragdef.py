@@ -87,6 +87,14 @@ _DS_CFG = {
         "embed_cache_dir": f"{_DATA_ROOT}/datasets/hotpotqa",
         "log_subdir":    "txt_logs_fullcorpus_hotpotqa",
     },
+    "msmarco": {
+        "corpus_path":   f"{_DATA_ROOT}/datasets/msmarco/corpus.jsonl",
+        "qrels_paths":   [],
+        "queries_jsonl": None,
+        "answers_json":  None,
+        "embed_cache_dir": f"{_DATA_ROOT}/datasets/msmarco",
+        "log_subdir":    "txt_logs_fullcorpus_msmarco",
+    },
 }
 
 _RETRIEVAL_ALIAS = {
