@@ -18,7 +18,7 @@ Defense (RD only):
 
 Usage:
   CUDA_VISIBLE_DEVICES=1 python eval/hotpotqa_ragdef_eval.py \\
-    --queries_csv data/generated/hotpotqa/poisonedrag4_hotpot100.csv \\
+    --queries_csv data/attackbaselines_pd/PoisonedRAG/hotpotqa/poisonedrag4_hotpot100.csv \\
     --gpu_id 0 --top_k 5 \\
     --out_dir eval/results/hotpotqa_ragdef_poisonedrag
 """
@@ -161,7 +161,7 @@ def ragdefender(docs, defense_model):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--queries_csv", type=str,
-                        default=str(_ROOT / "data/generated/hotpotqa/poisonedrag4_hotpot100.csv"))
+                        default=str(_ROOT / "data/attackbaselines_pd/PoisonedRAG/hotpotqa/poisonedrag4_hotpot100.csv"))
     parser.add_argument("--gpu_id",      type=int, default=0)
     parser.add_argument("--top_k",       type=int, default=5)
     parser.add_argument("--defense_model", type=str, default="paraphrase-MiniLM-L6-v2")

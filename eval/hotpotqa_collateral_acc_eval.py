@@ -10,8 +10,8 @@ Phase 2 (Attack): clean100 queries -> merge scores across corpus top-n + all 400
 
 Usage:
   CUDA_VISIBLE_DEVICES=1 python eval/hotpotqa_collateral_acc_eval.py \
-    --clean_csv   data/generated/hotpotqa/hotpotqa_clean100_seed42.csv \
-    --adv_csv     data/generated/hotpotqa/poisonedrag4_hotpot100.csv \
+    --clean_csv   data/generated/hotpotqa_clean_acc/hotpotqa_clean100_seed42.csv \
+    --adv_csv     data/attackbaselines_pd/PoisonedRAG/hotpotqa/poisonedrag4_hotpot100.csv \
     --adv_cols    doc0_seed doc1 doc2 doc3 \
     --gpu_id 1 --top_k 5 --ret_top_n 50 \
     --out_dir eval/results/hotpotqa_collateral_poisonedrag
@@ -82,10 +82,10 @@ def check_acc(correct_answer, response):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--clean_csv", type=str,
-                        default=str(_ROOT / "data/generated/hotpotqa/hotpotqa_clean100_seed42.csv"),
+                        default=str(_ROOT / "data/generated/hotpotqa_clean_acc/hotpotqa_clean100_seed42.csv"),
                         help="Evaluation query CSV (columns: query, answer)")
     parser.add_argument("--adv_csv", type=str,
-                        default=str(_ROOT / "data/generated/hotpotqa/poisonedrag4_hotpot100.csv"),
+                        default=str(_ROOT / "data/attackbaselines_pd/PoisonedRAG/hotpotqa/poisonedrag4_hotpot100.csv"),
                         help="Malicious document CSV (for other queries, injected globally)")
     parser.add_argument("--adv_cols", nargs="+",
                         default=["doc0_seed", "doc1", "doc2", "doc3"],

@@ -6,7 +6,7 @@ Phase 2: Attack ACC — merges 4 adv documents per query into the corpus retriev
 
 Usage:
   CUDA_VISIBLE_DEVICES=0 python eval/hotpotqa_adv_acc_eval.py \
-    --queries_csv data/generated/hotpotqa/poisonedrag4_hotpot100.csv \
+    --queries_csv data/attackbaselines_pd/PoisonedRAG/hotpotqa/poisonedrag4_hotpot100.csv \
     --gpu_id 0 \
     --out_dir eval/results/hotpotqa_adv_acc_poisonedrag
 
@@ -83,7 +83,7 @@ def check_asr(target_answer, response):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--queries_csv", type=str,
-                        default=str(_ROOT / "data/generated/hotpotqa/poisonedrag4_hotpot100.csv"))
+                        default=str(_ROOT / "data/attackbaselines_pd/PoisonedRAG/hotpotqa/poisonedrag4_hotpot100.csv"))
     parser.add_argument("--gpu_id",  type=int, default=0)
     parser.add_argument("--top_k",   type=int, default=5)
     parser.add_argument("--ret_top_n", type=int, default=50,
