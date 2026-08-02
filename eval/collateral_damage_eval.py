@@ -10,12 +10,19 @@ For each of the 100 unrelated queries we run BOTH:
 in the same process/run, so the delta isolates the injection effect rather
 than cross-run generation stochasticity.
 
+Single entry point for all three datasets (NQ, HotpotQA, MS MARCO) -- pass
+--dataset and the victim/poison/output CSV paths default to that dataset's
+files under data/generated/<dataset>_clean_acc/ and
+data/attackbaselines_pd/DiPoison/<dataset>/. Pass --victim_queries_csv /
+--poison_docs_csv explicitly to override.
+
 Usage:
   CUDA_VISIBLE_DEVICES=0 HF_HUB_DISABLE_XET=1 DIPOISON_DATA_ROOT=/path/to \
     PYTHONUNBUFFERED=1 python eval/collateral_damage_eval.py \
-    --victim_queries_csv data/generated/nq_clean_acc/clean_acc100.csv \
-    --poison_docs_csv data/attackbaselines_pd/DiPoison/dipoison4_nq100.csv \
-    --gpu_id 0
+    --dataset nq --gpu_id 0
+
+  CUDA_VISIBLE_DEVICES=0 python eval/collateral_damage_eval.py --dataset hotpotqa --gpu_id 0
+  CUDA_VISIBLE_DEVICES=0 python eval/collateral_damage_eval.py --dataset msmarco --gpu_id 0
 """
 import warnings
 warnings.filterwarnings("ignore")
@@ -44,21 +51,50 @@ from src.prompts import wrap_prompt as legacy_wrap_prompt
 _DEFAULT_MODEL_CONFIG = str(_ROOT / "model_configs" / "vicuna7b_config.json")
 _DOC_COLS = ["doc0_seed", "doc1", "doc2", "doc3", "doc4", "doc5", "doc6"]
 
+# Per-dataset defaults for the three CSV paths, keyed by --dataset. Only used
+# when the corresponding --victim_queries_csv/--poison_docs_csv/--out_csv
+# flag is not passed explicitly.
+_DATASET_DEFAULTS = {
+    "nq": {
+        "victim_queries_csv": "data/generated/nq_clean_acc/clean_acc100.csv",
+        "poison_docs_csv":    "data/attackbaselines_pd/DiPoison/nq/dipoison4_nq100.csv",
+        "out_csv":            "data/generated/nq_clean_acc/collateral_damage_results.csv",
+    },
+    "hotpotqa": {
+        "victim_queries_csv": "data/generated/hotpotqa_clean_acc/clean_acc100.csv",
+        "poison_docs_csv":    "data/attackbaselines_pd/DiPoison/hotpotqa/dipoison4_hotpot100.csv",
+        "out_csv":            "data/generated/hotpotqa_clean_acc/collateral_damage_results.csv",
+    },
+    "msmarco": {
+        "victim_queries_csv": "data/generated/msmarco_clean_acc/clean_acc100.csv",
+        "poison_docs_csv":    "data/attackbaselines_pd/DiPoison/msmarco/msmarco100_origin_dipoison_cont_n4g8.csv",
+        "out_csv":            "data/generated/msmarco_clean_acc/collateral_damage_results.csv",
+    },
+}
+
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--dataset", type=str, default="nq", choices=["nq", "hotpotqa", "msmarco"])
-    p.add_argument("--victim_queries_csv", type=str,
-                   default="data/generated/nq_clean_acc/clean_acc100.csv")
-    p.add_argument("--poison_docs_csv", type=str,
-                   default="data/attackbaselines_pd/DiPoison/dipoison4_nq100.csv")
-    p.add_argument("--out_csv", type=str,
-                   default="data/generated/nq_clean_acc/collateral_damage_results.csv")
+    p.add_argument("--victim_queries_csv", type=str, default=None,
+                   help="Defaults to _DATASET_DEFAULTS[--dataset]['victim_queries_csv'] when omitted")
+    p.add_argument("--poison_docs_csv", type=str, default=None,
+                   help="Defaults to _DATASET_DEFAULTS[--dataset]['poison_docs_csv'] when omitted")
+    p.add_argument("--out_csv", type=str, default=None,
+                   help="Defaults to _DATASET_DEFAULTS[--dataset]['out_csv'] when omitted")
     p.add_argument("--top_k", type=int, default=5)
     p.add_argument("--gpu_id", type=int, default=0)
     p.add_argument("--model_config_path", type=str, default=_DEFAULT_MODEL_CONFIG)
     p.add_argument("--embed_batch", type=int, default=512)
     args = p.parse_args()
+
+    ds_defaults = _DATASET_DEFAULTS[args.dataset]
+    if args.victim_queries_csv is None:
+        args.victim_queries_csv = ds_defaults["victim_queries_csv"]
+    if args.poison_docs_csv is None:
+        args.poison_docs_csv = ds_defaults["poison_docs_csv"]
+    if args.out_csv is None:
+        args.out_csv = ds_defaults["out_csv"]
 
     if "CUDA_VISIBLE_DEVICES" not in os.environ:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
@@ -116,6 +152,13 @@ def main():
 
     # ── victim queries ───────────────────────────────────────────
     qdf = pd.read_csv(args.victim_queries_csv)
+    # MS MARCO's clean_acc100.csv uses short_answer/short_answers_json instead
+    # of correct_answer/correct_answer_aliases; normalize so the rest of the
+    # pipeline is dataset-agnostic.
+    qdf = qdf.rename(columns={
+        "short_answer": "correct_answer",
+        "short_answers_json": "correct_answer_aliases",
+    })
     print(f"[load] victim_queries_csv: {len(qdf)} rows")
 
     rows_out = []
